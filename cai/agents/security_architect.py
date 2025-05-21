@@ -16,8 +16,13 @@ from cai.tools.web.search_web import (  # pylint: disable=import-error # noqa: E
 )
 
 from cai.tools.reconnaissance.document import (  # pylint: disable=import-error # noqa: E501
-    extract_pdf_content,
+    read_pdf_content,
     add_comment_to_pdf
+)
+
+from cai.tools.vendors.atlassian import ( # pylint: disable=import-error # noqa: E501
+    read_confluence_page,
+    write_confluence_inline_comment,
 )
 
 # Prompts
@@ -27,8 +32,10 @@ security_architect_agent_system_prompt = load_prompt_template("prompts/system_se
 functions = [
     generic_linux_command,
     execute_code,
-    extract_pdf_content,
+    read_pdf_content,
     add_comment_to_pdf,
+    read_confluence_page,
+    write_confluence_inline_comment,
 ]
 
 if os.getenv('PERPLEXITY_API_KEY'):

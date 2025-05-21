@@ -1,6 +1,10 @@
+"""
+These are the tools for the model to read and write to files and other documents.
+"""
+
 import pymupdf
 
-def extract_pdf_content(pdf_path: str) -> str:
+def read_pdf_content(pdf_path: str) -> str:
     """
     Extracts and concatenates text content from all pages of a PDF file.
 
