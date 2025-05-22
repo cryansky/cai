@@ -24,7 +24,8 @@ from cai.tools.vendors.atlassian import ( # pylint: disable=import-error # noqa:
     read_confluence_page,
     write_confluence_inline_comment,
     read_confluence_inline_comments,
-    reply_to_confluence_comment
+    reply_to_confluence_comment,
+    write_confluence_footer_comment
 )
 
 # Prompts
@@ -39,7 +40,8 @@ functions = [
     read_confluence_page,
     write_confluence_inline_comment,
     read_confluence_inline_comments,
-    reply_to_confluence_comment
+    reply_to_confluence_comment,
+    write_confluence_footer_comment
 ]
 
 if os.getenv('PERPLEXITY_API_KEY'):

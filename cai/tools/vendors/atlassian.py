@@ -10,6 +10,7 @@ from requests.auth import HTTPBasicAuth
 import html
 import json
 from bs4 import BeautifulSoup
+from markdownify import markdownify as md
 
 CONFLUENCE_URL = os.getenv("CONFLUENCE_URL") 
 CONFLUENCE_USER = os.getenv("CONFLUENCE_USER")
@@ -25,22 +26,6 @@ else:
     auth = None
     headers = {}
 
-def _fuzzy_find_excerpt(page_body: str, excerpt: str, cutoff: float = 0.95) -> str | None:
-    # Normalize whitespace and case
-    norm_page = re.sub(r'\s+', ' ', page_body).strip().lower()
-    norm_excerpt = re.sub(r'\s+', ' ', excerpt).strip().lower()
-
-    # Generate larger sliding windows around the size of the excerpt
-    window_size = len(norm_excerpt) + 20
-    candidates = [
-        norm_page[i:i + window_size]
-        for i in range(0, len(norm_page) - window_size, max(10, window_size // 10))
-    ]
-
-    # Find best match
-    matches = difflib.get_close_matches(norm_excerpt, candidates, n=1, cutoff=cutoff)
-    return matches[0] if matches else None
-
 def _strip_html_to_text(text):
     # Remove all HTML tags
     text = re.sub(r'<[^>]+>', '', text)
@@ -48,6 +33,34 @@ def _strip_html_to_text(text):
     text = html.unescape(text)
 
     return text
+
+def _strip_markdown(md_text: str) -> str:
+    """
+    Strips common Markdown syntax and returns plain visible text.
+    """
+    # Remove inline code and bold/italic markers
+    text = re.sub(r'`([^`]*)`', r'\1', md_text)        # `code`
+    text = re.sub(r'\*\*([^*]+)\*\*', r'\1', text)     # **bold**
+    text = re.sub(r'\*([^*]+)\*', r'\1', text)         # *italic*
+    text = re.sub(r'__([^_]+)__', r'\1', text)         # __bold__
+    text = re.sub(r'_([^_]+)_', r'\1', text)           # _italic_
+
+    # Remove headings
+    text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
+    # Remove blockquotes
+    text = re.sub(r'^>\s*', '', text, flags=re.MULTILINE)
+    # Remove link syntax but keep visible text
+    text = re.sub(r'\[([^\]]+)\]\([^)]+\)', r'\1', text)  # [text](url)
+    # Remove image syntax: ![alt](url)
+    text = re.sub(r'!\[([^\]]*)\]\([^)]+\)', r'\1', text)
+    # Remove list bullets and numbers
+    text = re.sub(r'^\s*[-*+]\s+', '', text, flags=re.MULTILINE)
+    text = re.sub(r'^\s*\d+\.\s+', '', text, flags=re.MULTILINE)
+    # Remove horizontal rules
+    text = re.sub(r'^-{3,}|^\*{3,}', '', text, flags=re.MULTILINE)
+
+    # Strip remaining markdown artifacts
+    return text.strip()
 
 def _remove_confluence_namespaced_tags(text):
     # Remove all self-closing namespaced tags like <ac:tag/>
@@ -79,10 +92,13 @@ def read_confluence_page(page_id: str) -> str:
 
         page_body = response.json()["body"]["storage"]["value"]
         page_body = _remove_confluence_namespaced_tags(page_body)
-        page_body = _strip_html_to_text(page_body)
+        page_body = md(page_body)
 
-        soup = BeautifulSoup(page_body, 'html.parser')
-        return soup.get_text()
+        # page_body = _strip_html_to_text(page_body)
+        # soup = BeautifulSoup(page_body, 'html.parser')
+        # return soup.get_text()
+
+        return page_body
 
     except requests.exceptions.HTTPError as e:
         return f"HTTP error: {e} — {e.response.text}"
@@ -95,7 +111,7 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
 
     Args:
         page_id (str): The unique ID of the Confluence page.
-        excerpt (str): The exact string (including the HTML tags) on the page to anchor the comment to. This match must be case-sensitive and character-exact.
+        excerpt (str): The exact string (without any tags or markdown elements) on the page to anchor the comment to. This match must be case-sensitive and character-exact.
         comment (str): The comment content to post.
 
     Returns:
@@ -105,24 +121,14 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
         return "Confluence credentials are missing or invalid."
 
     try:
-        page_detail_url = f"{CONFLUENCE_URL}/wiki/api/v2/pages/{page_id}?body-format=storage"
-        response = requests.get(page_detail_url, headers=headers, auth=auth)
-        response.raise_for_status()
+        # page_body = read_confluence_page(page_id)
+        # match = page_body.find(excerpt)
 
-        page_body = response.json()["body"]["storage"]["value"]
-        page_body = _remove_confluence_namespaced_tags(page_body)
-        page_body = _strip_html_to_text(page_body)
+        # if not match:
+        #     return "Excerpt not found in page content. Cannot create inline comment."
 
-        soup = BeautifulSoup(page_body, 'html.parser')        
-        page_body = soup.get_text()
-
-        match = page_body.find(excerpt) # _fuzzy_find_excerpt(page_body, excerpt)
-        print("Match", match)
-
-        if not match:
-            return "Excerpt not found in page content. Cannot create inline comment."
-
-        excerpt = _strip_html_to_text(excerpt)
+        # excerpt = _strip_html_to_text(excerpt)
+        excerpt = _strip_markdown(excerpt)
         
         comment_url = f"{CONFLUENCE_URL}/wiki/api/v2/inline-comments"
         payload = {
@@ -137,7 +143,7 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
                 "textSelectionMatchIndex": 0
             }
         }
-
+        print(payload)
         post_resp = requests.post(comment_url, headers=headers, auth=auth, data=json.dumps(payload))
         post_resp.raise_for_status()
         comment_id = post_resp.json().get("id", "unknown")
@@ -215,3 +221,43 @@ def reply_to_confluence_comment(comment_id: str, reply_text: str) -> str:
         return f"Reply posted successfully (ID: {comment_id})"
     except requests.exceptions.RequestException as e:
         return f"Error posting reply: {e}"
+    
+def write_confluence_footer_comment(page_id: str, comment_text: str, parent_comment_id: str = None) -> str:
+    """
+    Post a footer comment to a Confluence page.
+
+    Footer comments are used only when inline comments cannot be inserted. They appear
+    at the bottom of the page and can also be used to reply to an existing comment
+    by specifying `parent_comment_id`.
+
+    Args:
+        page_id (str): The ID of the Confluence page to comment on.
+        comment_text (str): The content of the comment.
+        parent_comment_id (str, optional): ID of the comment to reply to (if replying).
+
+    Returns:
+        str: Success message or error description.
+    """
+    if not auth:
+        return "Confluence credentials are missing or invalid."
+
+    try:
+        url = f"{CONFLUENCE_URL}/wiki/api/v2/footer-comments"
+        payload = {
+            "pageId": page_id,
+            "body": {
+                "representation": "storage",
+                "value": f"<p>{html.escape(comment_text)}</p>"
+            }
+        }
+
+        if parent_comment_id:
+            payload["parentCommentId"] = parent_comment_id
+
+        response = requests.post(url, headers=headers, auth=auth, json=payload)
+        response.raise_for_status()
+
+        comment_id = response.json().get("id", "unknown")
+        return f"Footer comment posted successfully (ID: {comment_id})"
+    except requests.exceptions.RequestException as e:
+        return f"Error posting footer comment: {e}"
