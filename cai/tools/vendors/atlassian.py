@@ -5,6 +5,7 @@ These are tools for interacting with Confluence Cloud via the v2 REST API.
 import os
 import re
 import requests
+import difflib
 from requests.auth import HTTPBasicAuth
 import html
 import json
@@ -23,6 +24,22 @@ if all([CONFLUENCE_URL, CONFLUENCE_USER, CONFLUENCE_API_TOKEN]):
 else:
     auth = None
     headers = {}
+
+def _fuzzy_find_excerpt(page_body: str, excerpt: str, cutoff: float = 0.95) -> str | None:
+    # Normalize whitespace and case
+    norm_page = re.sub(r'\s+', ' ', page_body).strip().lower()
+    norm_excerpt = re.sub(r'\s+', ' ', excerpt).strip().lower()
+
+    # Generate larger sliding windows around the size of the excerpt
+    window_size = len(norm_excerpt) + 20
+    candidates = [
+        norm_page[i:i + window_size]
+        for i in range(0, len(norm_page) - window_size, max(10, window_size // 10))
+    ]
+
+    # Find best match
+    matches = difflib.get_close_matches(norm_excerpt, candidates, n=1, cutoff=cutoff)
+    return matches[0] if matches else None
 
 def _strip_html_to_text(text):
     # Remove all HTML tags
@@ -99,12 +116,12 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
         soup = BeautifulSoup(page_body, 'html.parser')        
         page_body = soup.get_text()
 
-        match_index = page_body.find(excerpt)
-        if match_index == -1:
+        match = _fuzzy_find_excerpt(page_body, excerpt) # page_body.find(excerpt)
+        print("Match", match)
+
+        if not match:
             return "Excerpt not found in page content. Cannot create inline comment."
 
-        match_count = page_body.count(excerpt)
-        match_index = match_count - 1
         excerpt = _strip_html_to_text(excerpt)
         
         comment_url = f"{CONFLUENCE_URL}/wiki/api/v2/inline-comments"
@@ -116,8 +133,8 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
             },
             "inlineCommentProperties": {
                 "textSelection": excerpt,
-                "textSelectionMatchCount": match_count,
-                "textSelectionMatchIndex": match_index
+                "textSelectionMatchCount": 1,
+                "textSelectionMatchIndex": 0
             }
         }
 
@@ -132,21 +149,39 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
     except Exception as e:
         return f"Error posting inline comment: {e}"
     
-def read_confluence_inline_comments() -> list:
+def read_confluence_inline_comments(page_id: str) -> list:
     """
-    Fetch all inline comments.
+    Retrieve all inline comments associated with a specific Confluence page.
+
+    Args:
+        page_id (str): The unique ID of the Confluence page.
 
     Returns:
-        list: A list of inline comment objects.
+        list: A list of inline comment objects and the excerpt the comment attached to.
     """
     if not auth:
         raise ValueError("Confluence credentials are missing or invalid.")
 
     try:
         url = f"{CONFLUENCE_URL}/wiki/api/v2/inline-comments"
-        response = requests.get(url, headers=headers, auth=auth)
+        params = {
+            "id": page_id, 
+            "body-format": "storage"
+        }
+
+        response = requests.get(url, headers=headers, auth=auth, params=params)
         response.raise_for_status()
-        return response.json().get("results", [])
+
+        comments = []
+        for c in response.json().get("results", []):
+            excerpt = c.get('properties', {}).get('inlineOriginalSelection')
+            comment = c.get('body', {}).get('storage', {}).get('value')
+            if excerpt and comment:
+                comments.append({
+                    "Excerpt": excerpt,
+                    "Comment": comment
+                })
+        return comments
     except requests.exceptions.RequestException as e:
         print(f"Error fetching inline comments: {e}")
         return []
