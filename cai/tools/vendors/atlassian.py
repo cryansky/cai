@@ -116,7 +116,7 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
         soup = BeautifulSoup(page_body, 'html.parser')        
         page_body = soup.get_text()
 
-        match = _fuzzy_find_excerpt(page_body, excerpt) # page_body.find(excerpt)
+        match = page_body.find(excerpt) # _fuzzy_find_excerpt(page_body, excerpt)
         print("Match", match)
 
         if not match:

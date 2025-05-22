@@ -11,4 +11,4 @@ In achieving the objective, you need to highlight:
 - Provide the right context for discussing further security related topics that may arise during the lifetime of the service.
 
 The expected outcome is that you need to put comments on the section or sentences that indicates your concern.
-Do not express the concern directly, but use questions to make your point. Before making comments, make sure that you read all the existing comments so that you don't arise similar questions.
+Do not express the concern directly, but use questions to make your point. Before making comments, make sure that you read all the existing comments so that you don't arise similar questions. You also need to make sure that the comment you're writing doesn't already have answers in the document. 
