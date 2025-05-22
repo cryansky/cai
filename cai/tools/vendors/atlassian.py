@@ -24,6 +24,14 @@ else:
     auth = None
     headers = {}
 
+def _strip_html_to_text(text):
+    # Remove all HTML tags
+    text = re.sub(r'<[^>]+>', '', text)
+    # Decode HTML entities (e.g., &rsquo; -> ’)
+    text = html.unescape(text)
+
+    return text
+
 def _remove_confluence_namespaced_tags(text):
     # Remove all self-closing namespaced tags like <ac:tag/>
     text = re.sub(r'<[a-z]+:[^>/]+?/>', '', text)
@@ -69,7 +77,12 @@ def read_confluence_page(space: str, title: str) -> str:
         detail_response = requests.get(page_detail_url, headers=headers, auth=auth)
         detail_response.raise_for_status()
 
-        return detail_response.json()["body"]["storage"]["value"]
+        page_body = detail_response.json()["body"]["storage"]["value"]
+        page_body = _remove_confluence_namespaced_tags(page_body)
+        page_body = _strip_html_to_text(page_body)
+        soup = BeautifulSoup(page_body, 'html.parser')
+
+        return soup.get_text()
 
     except requests.exceptions.HTTPError as e:
         return f"HTTP error: {e} — {e.response.text}"
@@ -83,7 +96,7 @@ def write_confluence_inline_comment(space: str, title: str, excerpt: str, commen
     Args:
         space (str): Space key where the page is located.
         title (str): Title of the Confluence page.
-        excerpt (str): The exact text (including any HTML element and escaped string) on the page to anchor the comment to.
+        excerpt (str): The exact string (including the HTML tags) on the page to anchor the comment to. This match must be case-sensitive and character-exact.
         comment (str): The comment content to post.
 
     Returns:
@@ -112,29 +125,21 @@ def write_confluence_inline_comment(space: str, title: str, excerpt: str, commen
         detail_resp.raise_for_status()
 
         page_body = detail_resp.json()["body"]["storage"]["value"]
-        print("Page Body:", page_body)
-
         page_body = _remove_confluence_namespaced_tags(page_body)
-        print("Page Body Escaped:", page_body)
+        page_body = _strip_html_to_text(page_body)
 
-        print("Non-escaped: ", excerpt)
+        soup = BeautifulSoup(page_body, 'html.parser')        
+        page_body = soup.get_text()
+
         match_index = page_body.find(excerpt)
-
-        print("Page ID:", page_id)
 
         if match_index == -1:
             return "Excerpt not found in page content. Cannot create inline comment."
 
         match_count = page_body.count(excerpt)
         match_index = match_count - 1
-        excerpt = html.unescape(excerpt)
+        excerpt = _strip_html_to_text(excerpt)
         
-        print("textSelection:", excerpt)
-        print("Match Index:", match_index)
-        print("Expected Match Count:", match_count)
-        
-        # text_selection = page_body[match_index:match_index + len(excerpt)]
-
         comment_url = f"{CONFLUENCE_URL}/wiki/api/v2/inline-comments"
         payload = {
             "pageId": page_id,
@@ -149,11 +154,10 @@ def write_confluence_inline_comment(space: str, title: str, excerpt: str, commen
             }
         }
 
-        print("Payload:", payload)
-
         post_resp = requests.post(comment_url, headers=headers, auth=auth, data=json.dumps(payload))
         post_resp.raise_for_status()
         comment_id = post_resp.json().get("id", "unknown")
+        
         return f"Inline comment posted successfully (ID: {comment_id})"
 
     except requests.exceptions.HTTPError as e:
