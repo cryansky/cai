@@ -3,10 +3,12 @@ These are tools for interacting with Confluence Cloud via the v2 REST API.
 """
 
 import os
+import re
 import requests
 from requests.auth import HTTPBasicAuth
 import html
 import json
+from bs4 import BeautifulSoup
 
 CONFLUENCE_URL = os.getenv("CONFLUENCE_URL") 
 CONFLUENCE_USER = os.getenv("CONFLUENCE_USER")
@@ -22,6 +24,15 @@ else:
     auth = None
     headers = {}
 
+def _remove_confluence_namespaced_tags(text):
+    # Remove all self-closing namespaced tags like <ac:tag/>
+    text = re.sub(r'<[a-z]+:[^>/]+?/>', '', text)
+    # Remove all opening namespaced tags like <ac:tag ...>
+    text = re.sub(r'<[a-z]+:[^>]+?>', '', text)
+    # Remove all closing namespaced tags like </ac:tag>
+    text = re.sub(r'</[a-z]+:[^>]+?>', '', text)
+
+    return text
 
 def read_confluence_page(space: str, title: str) -> str:
     """
@@ -72,7 +83,7 @@ def write_confluence_inline_comment(space: str, title: str, excerpt: str, commen
     Args:
         space (str): Space key where the page is located.
         title (str): Title of the Confluence page.
-        excerpt (str): The exact text on the page to anchor the comment to.
+        excerpt (str): The exact text (including any HTML element and escaped string) on the page to anchor the comment to.
         comment (str): The comment content to post.
 
     Returns:
@@ -99,15 +110,29 @@ def write_confluence_inline_comment(space: str, title: str, excerpt: str, commen
         page_detail_url = f"{CONFLUENCE_URL}/wiki/api/v2/pages/{page_id}?body-format=storage"
         detail_resp = requests.get(page_detail_url, headers=headers, auth=auth)
         detail_resp.raise_for_status()
-        page_body = detail_resp.json()["body"]["storage"]["value"]
 
-        # excerpt = html.unescape(excerpt)
+        page_body = detail_resp.json()["body"]["storage"]["value"]
+        print("Page Body:", page_body)
+
+        page_body = _remove_confluence_namespaced_tags(page_body)
+        print("Page Body Escaped:", page_body)
+
+        print("Non-escaped: ", excerpt)
         match_index = page_body.find(excerpt)
+
+        print("Page ID:", page_id)
+
         if match_index == -1:
             return "Excerpt not found in page content. Cannot create inline comment."
 
         match_count = page_body.count(excerpt)
         match_index = match_count - 1
+        excerpt = html.unescape(excerpt)
+        
+        print("textSelection:", excerpt)
+        print("Match Index:", match_index)
+        print("Expected Match Count:", match_count)
+        
         # text_selection = page_body[match_index:match_index + len(excerpt)]
 
         comment_url = f"{CONFLUENCE_URL}/wiki/api/v2/inline-comments"
@@ -124,11 +149,6 @@ def write_confluence_inline_comment(space: str, title: str, excerpt: str, commen
             }
         }
 
-        print("Page ID:", page_id)
-        print("textSelection:", excerpt)
-        print("Match Index:", match_index)
-        print("Expected Match Count:", match_count)
-        print("Match Check:", page_body[match_index : match_index + len(excerpt)])
         print("Payload:", payload)
 
         post_resp = requests.post(comment_url, headers=headers, auth=auth, data=json.dumps(payload))
@@ -140,3 +160,52 @@ def write_confluence_inline_comment(space: str, title: str, excerpt: str, commen
         return f"HTTP error: {e} — {e.response.text}"
     except Exception as e:
         return f"Error posting inline comment: {e}"
+    
+def read_confluence_inline_comments() -> list:
+    """
+    Fetch all inline comments.
+
+    Returns:
+        list: A list of inline comment objects.
+    """
+    if not auth:
+        raise ValueError("Confluence credentials are missing or invalid.")
+
+    try:
+        url = f"{CONFLUENCE_URL}/wiki/api/v2/inline-comments"
+        response = requests.get(url, headers=headers, auth=auth)
+        response.raise_for_status()
+        return response.json().get("results", [])
+    except requests.exceptions.RequestException as e:
+        print(f"Error fetching inline comments: {e}")
+        return []
+
+def reply_to_confluence_comment(comment_id: str, reply_text: str) -> str:
+    """
+    Post a reply to a specific Confluence comment.
+
+    Args:
+        comment_id (str): The ID of the parent comment to reply to.
+        reply_text (str): The content of the reply.
+
+    Returns:
+        str: Success message or error description.
+    """
+    if not auth:
+        return "Confluence credentials are missing or invalid."
+
+    try:
+        url = f"{CONFLUENCE_URL}/wiki/api/v2/comments"
+        payload = {
+            "parentId": comment_id,
+            "body": {
+                "representation": "storage",
+                "value": f"<p>{html.escape(reply_text)}</p>"
+            }
+        }
+        response = requests.post(url, headers=headers, auth=auth, json=payload)
+        response.raise_for_status()
+        comment_id = response.json().get("id", "unknown")
+        return f"Reply posted successfully (ID: {comment_id})"
+    except requests.exceptions.RequestException as e:
+        return f"Error posting reply: {e}"

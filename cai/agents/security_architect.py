@@ -23,6 +23,8 @@ from cai.tools.reconnaissance.document import (  # pylint: disable=import-error 
 from cai.tools.vendors.atlassian import ( # pylint: disable=import-error # noqa: E501
     read_confluence_page,
     write_confluence_inline_comment,
+    read_confluence_inline_comments,
+    reply_to_confluence_comment
 )
 
 # Prompts
@@ -36,6 +38,8 @@ functions = [
     add_comment_to_pdf,
     read_confluence_page,
     write_confluence_inline_comment,
+    read_confluence_inline_comments,
+    reply_to_confluence_comment
 ]
 
 if os.getenv('PERPLEXITY_API_KEY'):
