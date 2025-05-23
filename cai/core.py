@@ -136,7 +136,7 @@ class CAI:  # pylint: disable=too-many-instance-attributes
         self.interaction_output_tokens = 0
         self.interaction_reasoning_tokens = 0
         self.interaction_cost = 0.0
-        self.max_chars_per_message = 15000  # number of characters
+        self.max_chars_per_message = 20000  # number of characters
         self.last_reasoning_content = ""
 
         # training data

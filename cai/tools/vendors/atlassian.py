@@ -82,9 +82,14 @@ def read_confluence_page(page_id: str) -> str:
 
         page_body = response.json()["body"]["storage"]["value"]
         page_body = _remove_confluence_namespaced_tags(page_body)
-        page_body = html2text.html2text(page_body)
 
-        return page_body
+        text_maker = html2text.HTML2Text()
+        text_maker.unicode_snob = True
+        text_maker.mark_code = True
+        text_maker.ignore_images = True
+        text = text_maker.handle(page_body)
+
+        return text
 
     except requests.exceptions.HTTPError as e:
         return f"HTTP error: {e} — {e.response.text}"
