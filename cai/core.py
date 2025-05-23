@@ -136,7 +136,7 @@ class CAI:  # pylint: disable=too-many-instance-attributes
         self.interaction_output_tokens = 0
         self.interaction_reasoning_tokens = 0
         self.interaction_cost = 0.0
-        self.max_chars_per_message = 5000  # number of characters
+        self.max_chars_per_message = 15000  # number of characters
         self.last_reasoning_content = ""
 
         # training data
@@ -800,7 +800,7 @@ class CAI:  # pylint: disable=too-many-instance-attributes
                 # pick the first half from the beginning and the second half
                 # from the end
                 half_len = self.max_chars_per_message // 2
-                result.value = (result.value[:half_len] +
+                result.value = (result.value[:half_len] + 
                                 result.value[-half_len:])
 
             partial_response.messages.append(

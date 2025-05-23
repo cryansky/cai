@@ -5,12 +5,10 @@ These are tools for interacting with Confluence Cloud via the v2 REST API.
 import os
 import re
 import requests
-import difflib
 from requests.auth import HTTPBasicAuth
 import html
 import json
-from bs4 import BeautifulSoup
-from markdownify import markdownify as md
+import html2text
 
 CONFLUENCE_URL = os.getenv("CONFLUENCE_URL") 
 CONFLUENCE_USER = os.getenv("CONFLUENCE_USER")
@@ -25,14 +23,6 @@ if all([CONFLUENCE_URL, CONFLUENCE_USER, CONFLUENCE_API_TOKEN]):
 else:
     auth = None
     headers = {}
-
-def _strip_html_to_text(text):
-    # Remove all HTML tags
-    text = re.sub(r'<[^>]+>', '', text)
-    # Decode HTML entities (e.g., &rsquo; -> ’)
-    text = html.unescape(text)
-
-    return text
 
 def _strip_markdown(md_text: str) -> str:
     """
@@ -92,11 +82,7 @@ def read_confluence_page(page_id: str) -> str:
 
         page_body = response.json()["body"]["storage"]["value"]
         page_body = _remove_confluence_namespaced_tags(page_body)
-        page_body = md(page_body)
-
-        # page_body = _strip_html_to_text(page_body)
-        # soup = BeautifulSoup(page_body, 'html.parser')
-        # return soup.get_text()
+        page_body = html2text.html2text(page_body)
 
         return page_body
 
@@ -143,7 +129,7 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
                 "textSelectionMatchIndex": 0
             }
         }
-        print(payload)
+        
         post_resp = requests.post(comment_url, headers=headers, auth=auth, data=json.dumps(payload))
         post_resp.raise_for_status()
         comment_id = post_resp.json().get("id", "unknown")
@@ -151,6 +137,8 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
         return f"Inline comment posted successfully (ID: {comment_id})"
 
     except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 400:
+            return f"HTTP error: {e} - Excerpt might not be found on the Confluence page or might contain invalid characters."
         return f"HTTP error: {e} — {e.response.text}"
     except Exception as e:
         return f"Error posting inline comment: {e}"

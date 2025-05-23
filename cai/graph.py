@@ -235,9 +235,10 @@ class Graph(nx.DiGraph):
             # Convert list of tool calls to readable format
             action_labels = []
             for tool_call in action:
-                args_dict = json.loads(tool_call.function.arguments)
-                args_str = ", ".join(f"{k}={v}" for k, v in args_dict.items())
-                action_labels.append(f"{tool_call.function.name}({args_str})")
+                if tool_call.function.arguments:
+                    args_dict = json.loads(tool_call.function.arguments)
+                    args_str = ", ".join(f"{k}={v}" for k, v in args_dict.items())
+                    action_labels.append(f"{tool_call.function.name}({args_str})")
             action_label = "\n".join(action_labels)
 
         if self.previous_node:

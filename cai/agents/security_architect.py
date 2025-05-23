@@ -56,6 +56,3 @@ security_architect_agent = Agent(
     functions=functions,
     parallel_tool_calls=False,
 )
-
-def transfer_to_security_architect():
-    return security_architect_agent
