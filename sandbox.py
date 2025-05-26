@@ -1,72 +1,643 @@
-# from markdownify import markdownify as md
-import html2text
-html = """
-:info:atlassian-info#F4F5F7<p> Have any questions, comments or suggestions to improve this template? Join the conversation on Slack at&nbsp;<a href="https://skyscanner.slack.com/messages/C84NAKQ9Z">#technical-initiatives</a>&nbsp;</p><p> Want to understand the process better? Have a look in the <a href="https://skyscanner.atlassian.net/wiki/pages/createpage.action?spaceKey=DR&amp;title=Playbook">Playbook</a></p><p />#B3D4FF<h3><span style="color: rgb(7,71,166);">Goals</span></h3><ul><li><p>On single-org</p><ul><li><p>Grant admin permissions to GitHub Teams for squads declared as <code>owner</code>  in each repo&rsquo;s <code>.catalog.yml</code> , partially automating Service Handover Checklist </p></li><li><p>Grant write permissions to <a href="https://github.skyscannertools.net/orgs/skyscanner/teams/bots/members">@skyscanner/bots</a>, automating Set up your project with security collaborators and apps </p></li></ul></li><li><p>On any org</p><ul><li><p>Ensure GitHub Actions OIDC subject claim configuration is correct for every repo and org, permitting access to AWS through Catalyst&rsquo;s Reusable Workflows</p></li></ul></li><li><p>While joining single-org</p><ul><li><p>Migrate Drone secrets and Slingshot projects, automating GitHub Repository Move/Rename Checklist </p></li></ul></li></ul>#4C9AFF<h3><span style="color: rgb(255,255,255);">Recording</span></h3><p><time datetime="2023-09-20" />, 15:00 to 15:30 UK Time (<a href="https://skyscanner.slack.com/archives/C3SJMCBGE/p1694195037596389">#eng-design-review</a>)</p><p>Recording: <a data-card-appearance="inline" href="https://skyspace.sharepoint.com/:v:/r/docs/Catalyst%20Squad/Design%20Review%20Recordings/magician%20for%20GitHub.mp4?csf=1&amp;web=1&amp;e=pwA24b&amp;nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJTdHJlYW1XZWJBcHAiLCJyZWZlcnJhbFZpZXciOiJTaGFyZURpYWxvZyIsInJlZmVycmFsQXBwUGxhdGZvcm0iOiJXZWIiLCJyZWZlcnJhbE1vZGUiOiJ2aWV3In19">https://skyspace.sharepoint.com/:v:/r/docs/Catalyst%20Squad/Design%20Review%20Recordings/magician%20for%20GitHub.mp4?csf=1&amp;web=1&amp;e=pwA24b&amp;nav=eyJyZWZlcnJhbEluZm8iOnsicmVmZXJyYWxBcHAiOiJTdHJlYW1XZWJBcHAiLCJyZWZlcnJhbFZpZXciOiJTaGFyZURpYWxvZyIsInJlZmVycmFsQXBwUGxhdGZvcm0iOiJXZWIiLCJyZWZlcnJhbE1vZGUiOiJ2aWV3In19</a> </p>#B3D4FF<h3><span style="color: rgb(7,71,166);">Non-goals</span></h3><ul><li><p>On single-org</p><ul><li><p>Creating GitHub Teams for squads and keeping them synchronised with Flightdeck (see also, GitHub Enterprise - SCIM Design Review)</p></li><li><p>Removing admin privileges from squads or individuals not declared in <code>.catalog.yml</code></p></li></ul></li><li><p>While joining GHA</p><ul><li><p>Detecting repositories joining GitHub Actions from Drone and automatically converting <code>.drone.yml</code> files</p></li><li><p>Detecting repositories using a Starter Workflow to join GitHub Actions and suggesting additional migration steps</p></li><li><p>Automatically copying Drone secrets to GitHub Actions secrets</p></li></ul></li></ul><p><em><span style="color: rgb(151,160,175);">We may decide to implement some of these goals at a future date, but they would be separately planned and designed.</span></em></p>#4C9AFF<h3><span style="color: rgb(255,255,255);">References</span></h3><p>Initiative associated to this DR<br />COPP-6477cbeb7af4-6b44-377d-9c72-f913e24e91b7System Jira </p><p>Task or epic associated to completing this DR<br />COPP-6483cbeb7af4-6b44-377d-9c72-f913e24e91b7System Jira </p><hr />#4C9AFF<h3><span style="color: rgb(255,255,255);">Foundations</span></h3><h2>Context and problem statement true</h2><h3>Product Goal</h3><p>Today&rsquo;s developer experience at Skyscanner is filled with &ldquo;if you know, you know&rdquo;s- while the https://skyscanner.atlassian.net/wiki/spaces/DEVEX does a great job at guiding developers through golden paths and common issues, our Production Platform squads still face an unfortunate level of TOIL due to the rapidly changing nature of software engineering and our automated processes often struggling to keep up (e.g., Catalyst still needs to manually issue squad Artifactory tokens, enable GitHub Actions on new orgs, and assist colleagues locked out of old repositories).</p><p>Looking ahead to <em>GitHub Actions replacing Drone in 2024 (</em>Project Actions - Enterprise Implementation of GitHub Actions and Migration <em>)</em> and <em>SCIM providing GitHub Teams for every single engineering squad</em> (GitHub Enterprise - SCIM Design Review), we&rsquo;ve identified a number of jobs (&ldquo;spells&rdquo;) we could perform following receipt of a GitHub Webhook:</p>System JIRAtype,key,summary,Story Points,updated,assignee,reporter,status,resolutionissuetype,issuekey,summary,customfield_10041,updated,assignee,reporter,status,resolution20(&quot;Epic Link&quot;=COPP-6477 OR &quot;Parent Link&quot;=COPP-6477) AND Summary !~ &quot;Design Review:&quot; AND (Labels is empty OR Labels != &quot;Security-Checklist&quot;) ORDER BY rank       cbeb7af4-6b44-377d-9c72-f913e24e91b7<p>Though we appreciate there&rsquo;s more we could automate through magician, we&rsquo;ve decided further work should be separately planned &amp; scoped from this DR since we understand this to be an early opportunity to discover scaling / rate limiting issues with GitHub and AWS Lambda.</p><h3>Design Goal</h3><p>🪄 We&rsquo;d like to make our devex feel like<em> magic</em>, leveraging webhooks available to GitHub Apps (<a href="https://docs.github.com/en/enterprise-server@3.8/rest/apps/webhooks">GitHub Docs</a>) to automate common TOIL that frustrates consistent experiences on GitHub Enterprise Server.</p><p>mshell-cut tries to automatically set up Drone webhooks and secrets for new repositories, but we lack tooling for manipulating existing repositories since mshell-tools is unlikely to have access to a GitHub Personal Access Token for the engineer invoking it. We also understand giving mshell-tools access to a sufficiently privileged PAT would be a challenge: we&rsquo;d either have to create a microservice to perform requests with the PAT (~like our proposal for magician, but with more human involvement rather than webhooks) or ask developers to create a PAT and provide it to their terminal.</p><p>We believe developers shouldn&rsquo;t have to care about these unique-to-Skyscanner details: They shouldn&rsquo;t have to find the right DEVEX article. They shouldn&rsquo;t have to get a colleague to guide them through the process. They shouldn&rsquo;t be capable of saying &ldquo;I forgot to&hellip;&rdquo;.</p><p>We propose creating a new GitHub App, based on <a href="https://github.skyscannertools.net/mshell-lambda/mshell-lambda-py3">mshell-lambda-py3</a>, that can receive events through a webhook before using its App privileges to manipulate repositories/orgs and provide feedback on performed actions through <a href="https://docs.github.com/en/enterprise-server@3.8/rest/commits/statuses">commit statuses</a>.</p><h3>How To Get In Touch</h3><p>Reach out to 🧪 Catalyst Squad for questions and suggestions, Design Slack Channel: <a href="https://skyscanner.slack.com/archives/C051Y56GU6N">#temp-sso-fan-club</a>.&nbsp;</p><h3>Stakeholder Alignment</h3><table ac:local-id="59e81703-264d-43a7-ab77-7d6c90b10a89" data-layout="default" data-table-width="1800"><tbody><tr><th><p><strong>What</strong></p></th><th><p><strong>How</strong></p></th><th><p><strong>Who</strong></p></th></tr><tr><td><p><span style="color: rgb(151,160,175);">What do you need to align with them on? Operations, finance?</span></p></td><td><p><em><span style="color: rgb(151,160,175);">How will you be interfacing with them? Documents, meetings,&nbsp;&nbsp;or an area, such as storage of data, or reporting functionalities</span></em></p></td><td><p><em><span style="color: rgb(151,160,175);">Relatively straightforward, who or which group do you need to interface with?</span></em></p></td></tr><tr><td><p>Provide documentation, APIs, and configuration toggles</p></td><td><p><a href="https://docs.github.com/">docs.github.com</a></p><p><a href="https://support.github.com/">support.github.com</a></p></td><td><p><em>Third-Party Vendor:</em> GitHub</p></td></tr><tr><td><p>Advise on changes to GitHub UAR governance and devex tooling</p></td><td><p>Initial scoping meetings and regular status updates in <a href="https://skyscanner.slack.com/archives/C051Y56GU6N">#temp-sso-fan-club</a></p></td><td><p><em>Squad: </em><a href="https://flightdeck.skyscannertools.net/squads/Guardians">Guardians</a> + <a href="https://flightdeck.skyscannertools.net/squads/Shield">Shield</a></p></td></tr><tr><td><p>Understand changes to access controls on GitHub Enterprise Server and impact on day-to-day usage</p></td><td><p>Design Review (shared in <a href="https://skyscanner.slack.com/archives/C3SJMCBGE/p1694195037596389">#eng-design-review</a> and other Slack channels for known single-org users)</p></td><td><p><em>Discipline:</em> Engineers using GitHub Enterprise Server</p></td></tr><tr><td><p>Pilot validating changes to access controls on GitHub Enterprise Server and impact on day-to-day usage by dogfooding with our own services</p><p>Manage ongoing operational responsibilities for GitHub Enterprise Server</p><p>Implement and maintain <em>magician</em> as a lambda-py3</p></td><td><p>Regular squad catchups</p><p><a href="https://skyscanner.slack.com/archives/C051Y56GU6N">#temp-sso-fan-club</a></p></td><td><p><em>Squad: </em><a href="https://flightdeck.skyscannertools.net/squads/Catalyst">Catalyst</a></p><p><em>(that's us!)</em></p></td></tr></tbody></table><hr /><p><em><span style="color: rgb(151,160,175);">You can remove this section once Step 2 has been completed</span></em></p>Instructions..<h3>Step 2: Discovery</h3><p><strong>Research &amp; Proposal</strong></p>
+import json
 
-11
-11
-incomplete
-<span class="placeholder-inline-tasks">Set Confluence label as<a href="https://skyscanner.atlassian.net/wiki/spaces/listrssfeeds.action?key=~harlanren">&nbsp;</a>DISCOVERYGreen</span>
-
-
-12
-12
-incomplete
-<span class="placeholder-inline-tasks">Perform initial evaluation of pros/cons</span>
-
-
-13
-13
-incomplete
-<span class="placeholder-inline-tasks">Spikes of work to validate assertions</span>
-
-
-14
-14
-incomplete
-<span class="placeholder-inline-tasks">Propose solution &amp; identify initial components for focus</span>
-
-<p><strong>Overview and Theory of Operation</strong></p><ul><li><p>Components and their responsibilities</p></li><li><p>Diagrams and diagrams</p></li><li><p>Details of algorithms</p></li><li><p>On different platforms</p></li></ul><p><strong>Resilience to Failure</strong></p><ul><li><p>Modes of failure</p></li><li><p>Consideration of likelihood or frequency of failures</p></li><li><p>Impact of failures</p></li><li><p>Detection methods</p></li><li><p>Prevention/Mitigation steps</p></li><li><p>Recovery actions</p></li></ul><p />Tips..<h3>  Give Overview</h3><p>Describe the system. Include in this section any contracts with clients: service endpoints, APIs and configuration data. See the <a href="http://skyscanner.atlassian.net/wiki/spaces/DR/pages/143493481/Guidelines+on+designs#Guidelinesondesigns-discovery">section on Theory of operations</a> in the guidelines.</p><h3>  Resilience to Failure</h3><p>Don't just consider the &quot;happy path&quot; of the system. Think about the ways the system can fail and how to reduce the impact of these failures.</p><p>Can the design sustain a 10x increase in traffic without a change to the design / implementation?</p><p /><p />#4C9AFF<h3><span style="color: rgb(255,255,255);">Discovery</span></h3><h2>Overview and Theory of Operation</h2><p><em><span style="color: rgb(151,160,175);">Describe the system. Include in this section any contracts with clients: service endpoints, APIs and configuration data.</span></em></p><h3>Overview and description</h3><p>magician bundles a variety of jobs (&ldquo;spells&rdquo;) based on webhooks that aspire to reduce developer TOIL.</p><h4>Spell #1: Reconciling Repository Permissions</h4>:magic_wand:1fa84🪄#EAE6FF<p><strong>Webhook Event</strong></p><p><a href="https://docs.github.com/en/enterprise-server@3.8/webhooks/webhook-events-and-payloads#push">push</a></p>:mag:1f50d🔍#FFEBE6<p><strong>Conditions</strong></p><p><code>ref</code> must match the repository&rsquo;s default branch, as indicated through the <code>repository</code> object&rsquo;s <code>default_branch</code> property</p>:magic_wand:1fa84🪄#EAE6FF<p><strong>Webhook Event</strong></p><p><a href="https://docs.github.com/en/enterprise-server@3.8/webhooks/webhook-events-and-payloads#repository">repository</a></p>:mag:1f50d🔍#FFEBE6<p><strong>Conditions</strong></p><p><code>action</code> must not be any of the following:</p><ul><li><p><code>archived</code></p></li><li><p><code>created</code></p></li><li><p><code>deleted</code></p></li></ul>:white_check_mark:2705✅#E3FCEF<p><strong>Goals</strong></p><ul><li><p>Grant admin permissions to GitHub Teams for squads declared as <code>owner</code>  in each repo&rsquo;s <code>.catalog.yml</code> , partially automating Service Handover Checklist </p></li><li><p>Grant write permissions to <a href="https://github.skyscannertools.net/orgs/skyscanner/teams/bots/members">@skyscanner/bots</a>, automating Set up your project with security collaborators and apps  </p></li></ul>:robot:1f916🤖#E6FCFF<p><strong>Interactions</strong></p><ol start="1"><li><p>GHES &rarr; magician (webhook, event: <code>push</code>)</p></li><li><p>magician &rarr; GHES (ask for teams on repo)</p><ol start="1"><li><p>GHES &rarr; magician (return teams on repo)</p></li></ol></li><li><p>🔁 magician &rarr; GHES (assign team to repo)</p><ol start="1"><li><p>GHES &rarr; magician (confirm team assigned)</p></li></ol></li><li><p>magician &rarr; GHES (report status on commit)</p><ol start="1"><li><p>GHES &rarr; magician (confirm commit status reported)</p></li></ol></li></ol>:calendar_spiral:1f5d3🗓️#DEEBFF<p><strong>Delivery</strong></p><ul><li><p>COPP-6478cbeb7af4-6b44-377d-9c72-f913e24e91b7System Jira </p><ul><li><p><a href="https://github.skyscannertools.net/skyscanner/magician/pull/3">https://github.skyscannertools.net/skyscanner/magician/pull/3</a></p></li></ul></li><li><p>COPP-6607cbeb7af4-6b44-377d-9c72-f913e24e91b7System Jira  </p><ul><li><p><a href="https://github.skyscannertools.net/skyscanner/magician/pull/5">https://github.skyscannertools.net/skyscanner/magician/pull/5</a></p></li></ul></li><li><p>COPP-6929cbeb7af4-6b44-377d-9c72-f913e24e91b7System Jira </p><ul><li><p><a href="https://github.skyscannertools.net/skyscanner/magician/pull/32">https://github.skyscannertools.net/skyscanner/magician/pull/32</a></p></li></ul></li></ul>📽️Explain Like I'm Five / Demo<p>First, observe the repository only lists <strong>Catalyst</strong> with access.</p><p>Second, we modify the <code>.catalog.yml</code> to add <strong>Example</strong> as another <code>owner</code></p><p>Third, observe the commit status message and the repository now lists <strong>Catalyst</strong> and <strong>Example</strong> with access.</p><p /><h4>Spell #2: Fix OIDC sub claims for individual repos</h4>:magic_wand:1fa84🪄#EAE6FF<p><strong>Webhook Event</strong></p><p><a href="https://docs.github.com/en/enterprise-server@3.8/webhooks/webhook-events-and-payloads#repository">repository</a></p>:mag:1f50d🔍#FFEBE6<p><strong>Conditions</strong></p><p><code>action</code> must not be any of the following:</p><ul><li><p><code>archived</code></p></li><li><p><code>deleted</code></p></li></ul>:white_check_mark:2705✅#E3FCEF<p><strong>Goals</strong></p><ul><li><p>Ensure GitHub Actions OIDC subject claim configuration is correct for every repo, permitting access to AWS through Catalyst&rsquo;s Reusable Workflows</p></li></ul>:robot:1f916🤖#E6FCFF<p><strong>Interactions</strong></p><ol start="1"><li><p>GHES &rarr; magician (webhook, event: <code>repository</code>)</p></li><li><p>magician &rarr; GHES (ask for OIDC configuration on repository)</p><ol start="1"><li><p>GHES &rarr; magician (return OIDC configuration)</p></li></ol></li><li><p>magician &rarr; GHES (manipulate OIDC configuration on repository)</p><ol start="1"><li><p>GHES &rarr; magician (confirm OIDC configuration changed)</p></li></ol></li><li><p>magician &rarr; GHES (ask for OIDC configuration on repository)</p><ol start="1"><li><p>GHES &rarr; magician (return OIDC configuration)</p></li></ol></li></ol>:calendar_spiral:1f5d3🗓️#DEEBFF<p><strong>Delivery</strong></p><ul><li><p>COPP-6563cbeb7af4-6b44-377d-9c72-f913e24e91b7System Jira </p><ul><li><p><a href="https://github.skyscannertools.net/skyscanner/magician/pull/4">https://github.skyscannertools.net/skyscanner/magician/pull/4</a></p></li></ul></li></ul><p /><h4>Spell #3: Fix OIDC sub claims for orgs</h4>:magic_wand:1fa84🪄#EAE6FF<p><strong>Webhook Event</strong></p><p><a href="https://docs.github.com/en/enterprise-server@3.8/webhooks/webhook-events-and-payloads#installation">installation</a> + <a href="https://docs.github.com/en/enterprise-server@3.8/webhooks/webhook-events-and-payloads#repository">repository</a></p>:mag:1f50d🔍#FFEBE6<p><strong>Conditions</strong></p><p><code>action</code> must not be any of the following:</p><ul><li><p><code>deleted</code></p></li><li><p><code>suspend</code></p></li></ul>:white_check_mark:2705✅#E3FCEF<p><strong>Goals</strong></p><ul><li><p>Ensure GitHub Actions OIDC subject claim configuration is correct for every org, permitting access to AWS through Catalyst&rsquo;s Reusable Workflows</p></li></ul>:robot:1f916🤖#E6FCFF<p><strong>Interactions</strong></p><ol start="1"><li><p>GHES &rarr; magician (webhook, event: <code>installation</code> + <code>repository</code>)</p></li><li><p>magician &rarr; GHES (ask for OIDC configuration on repository, includes org details)</p><ol start="1"><li><p>GHES &rarr; magician (return OIDC configuration)</p></li></ol></li><li><p>magician &rarr; GHES (manipulate OIDC configuration on <strong>org</strong>)</p><ol start="1"><li><p>GHES &rarr; magician (confirm OIDC configuration changed)</p></li></ol></li><li><p>magician &rarr; GHES (ask for OIDC configuration on repository)</p><ol start="1"><li><p>GHES &rarr; magician (return OIDC configuration)</p></li></ol></li></ol>:calendar_spiral:1f5d3🗓️#DEEBFF<p><strong>Delivery</strong></p><ul><li><p>COPP-6562cbeb7af4-6b44-377d-9c72-f913e24e91b7System Jira  </p></li></ul><p /><h4>Spell #4: Associate GitHub Teams with IdP Groups</h4><p>Won't doRed </p><p>Following a lack of response from GitHub regarding bugs discovered through GitHub Enterprise - SCIM Design Review, we&rsquo;ve decided to cancel this work in favour of a different approach that doesn&rsquo;t require associating GitHub Teams with IdP Groups (COPP-6668cbeb7af4-6b44-377d-9c72-f913e24e91b7System Jira).</p><p>We&rsquo;ll retain &ldquo;Spell #4&rdquo;'s numbering for any unforeseen future GitHub Teams enablement work.</p><p>We still expect every single engineering squad to have an automatically created <a href="https://docs.github.com/en/enterprise-server@3.8/organizations/organizing-members-into-teams/about-teams">GitHub Team</a> on <a href="https://github.skyscannertools.net/skyscanner">/skyscanner</a>, with <a href="https://skyscanner.atlassian.net/wiki/spaces/COPPER/pages/666113766/Design+Review+magician+for+GitHub#Spell-%231%3A-Reconciling-Repository-Permissions">Spell #1: Reconciling Repository Permissions</a> ensuring squads declared in <code>.catalog.yml</code> have admin rights over their repos.</p>[Archived] Spell #4: Associate GitHub Teams with IdP Groups<p />:magic_wand:1fa84🪄#EAE6FF<p><strong>Webhook Event</strong></p><p><a href="https://docs.github.com/en/enterprise-server@3.8/webhooks/webhook-events-and-payloads#push">push</a></p>:mag:1f50d🔍#FFEBE6<p><strong>Conditions</strong></p><p><code>ref</code> must match the repository&rsquo;s default branch, as indicated through the <code>repository</code> object&rsquo;s <code>default_branch</code> property</p>:white_check_mark:2705✅#E3FCEF<p><strong>Goals</strong></p><ul><li><p>Link GitHub Teams with <a href="https://docs.github.com/en/enterprise-cloud@latest/organizations/organizing-members-into-teams/synchronizing-a-team-with-an-identity-provider-group">IdP Groups</a> (see also, GitHub Enterprise - SCIM Design Review)</p></li></ul>:robot:1f916🤖#E6FCFF<p><strong>Interactions</strong></p><ol start="1"><li><p>GHES &rarr; magician (webhook, event: <code>push</code>)</p></li><li><p>magician &rarr; GHES (ask for GitHub Team)</p><ol start="1"><li><p>GHES &rarr; magician (return 404)</p></li></ol></li><li><p>magician &rarr; GHES (ask for <a href="https://docs.github.com/en/enterprise-cloud@latest/organizations/organizing-members-into-teams/synchronizing-a-team-with-an-identity-provider-group">IdP Group</a>)</p><ol start="1"><li><p>GHES &rarr; magician (confirm IdP Group exists)</p></li></ol></li><li><p>magician &rarr; GHES (create GitHub Team with <a href="https://docs.github.com/en/enterprise-cloud@latest/organizations/organizing-members-into-teams/synchronizing-a-team-with-an-identity-provider-group">IdP Group</a>)</p><ol start="1"><li><p>GHES &rarr; magician (confirm creation)</p></li></ol></li></ol>:calendar_spiral:1f5d3🗓️#DEEBFF<p><strong>Delivery</strong></p><ul><li><p>COPP-6605cbeb7af4-6b44-377d-9c72-f913e24e91b7System Jira   </p></li></ul><h4>Spell #5: Handle repos being transferred into the single-org</h4>:magic_wand:1fa84🪄#EAE6FF<p><strong>Webhook Event</strong></p><p><a href="https://docs.github.com/en/enterprise-server@3.8/webhooks/webhook-events-and-payloads#repository">repository</a></p>:mag:1f50d🔍#FFEBE6<p><strong>Conditions</strong></p><p><code>action</code> must be <code>transferred</code></p>:white_check_mark:2705✅#E3FCEF<p><strong>Goals</strong></p><ul><li><p>Migrate Drone secrets and Slingshot projects, automating GitHub Repository Move/Rename Checklist </p><ul><li><p>See &sect; <a href="https://skyscanner.atlassian.net/wiki/spaces/PLAT/pages/613574577/Do+we+force+people+to+use+a+single+GitHub+org+before+enabling+Actions#first%2C-we-support-squads-in-joining-the-single-org">first, we support squads in joining the single org</a> for more details on the TOIL currently required of engineering squads</p></li></ul></li></ul>:robot:1f916🤖#E6FCFF<p><strong>Interactions</strong></p><ol start="1"><li><p>GHES &rarr; magician (webhook, event: <code>repository</code>)</p></li><li><p>magician &rarr; GHES (ask for repo details on new org)</p><ol start="1"><li><p>GHES &rarr; magician (return repo details)</p></li></ol></li><li><p> magician &rarr; Drone (rename repository from old org to new org)</p><ol start="1"><li><p>Drone &rarr; magician (confirm rename + transfer secrets and build logs)</p></li></ol></li><li><p> magician &rarr; Slingshot (rename repository&rsquo;s projects from old org to new org)</p><ol start="1"><li><p>Slingshot &rarr; (confirm rename + transfer build logs)</p></li></ol></li></ol>:calendar_spiral:1f5d3🗓️#DEEBFF<p><strong>Delivery</strong></p><ul><li><p>COPP-6479cbeb7af4-6b44-377d-9c72-f913e24e91b7System Jira   </p></li></ul><p /><h3>Resilience To Failure</h3>:info:atlassian-info#F4F5F7<p>Feedback Wanted</p><p><em><span style="color: rgb(151,160,175);">The Resilience to Failure section of the design has been moved to &quot;Discovery&quot; from the &quot;Production&quot; section in an attempt to encourage designers to consider failure up front. It has also been updated to include some additional structure and advice on how to think about designing for failure. As this is a recent change feedback would be appreciated in the </span></em><a href="https://skyscanner.slack.com/archives/CHT2XL0DP"><em><span style="color: rgb(151,160,175);">#design-review-working-group</span></em></a><em><span style="color: rgb(151,160,175);"> slack channel.</span></em></p><p><em><span style="color: rgb(151,160,175);">Consider the overview section above and then document the way you can foresee the system failing and how such failures can be addressed.</span></em></p><p><em><span style="color: rgb(151,160,175);">Consider things like: Unreachable dependencies, Unexpected spikes in demand, a sustained large increase in demand (2x, 10x, 100x), Bad inputs, A failure of the platform(s) the system runs on, Lack of resources (CPU/Memory/Disk)</span></em></p><table ac:local-id="4e345197-7dec-4b09-b6c8-a617eb0ce410" data-layout="default" data-table-width="1800"><tbody><tr><th><p>Failure</p></th><th><p>Impact</p></th><th><p>Likelihood/Frequency</p></th><th><p>Detection</p></th><th><p>Prevention/Mitigation</p></th><th><p>Recovery</p></th></tr><tr><td><p><em><span style="color: rgb(151,160,175);">Describe a specific mode of failure which could impact the design system (1 per row)</span></em></p></td><td><p><em><span style="color: rgb(151,160,175);">What would the impact of this failure be on the traveller/partner/Skyscanner?</span></em></p></td><td><p><em><span style="color: rgb(151,160,175);">What is the assessed likeihood or frequency of this failure occurring. Use Low/Medium/High for assumptions.</span></em></p></td><td><p><em><span style="color: rgb(151,160,175);">How can you monitor for this failure so that you are aware that the issue has occurred and take any mitigating or recovery actions may be required.</span></em></p></td><td><p><em><span style="color: rgb(151,160,175);">What changes can be made to the design in order to completely prevent or reduce the frequency/impact of this failure occurring. Mitigation can be automatic or manual state which explicitly.</span></em></p><p><em><span style="color: rgb(151,160,175);">e.g. Can the system operate in a degraded functional state when dependencies are unavailable?</span></em></p></td><td><p><em><span style="color: rgb(151,160,175);">What activities would need to happen after the incident to recover the system to a proper state? Does tooling or functionality need to be prepared in advance of failure to support recovery?</span></em></p><p><em><span style="color: rgb(151,160,175);">e.g. Database Backup/Restore Processes, Backfilling data</span></em></p></td></tr></tbody></table><hr /><p><em><span style="color: rgb(151,160,175);">You can remove this section once Step 3 has been completed</span></em></p>Instructions..<h3>Step 3: WIP</h3><p><strong>Production checklist fulfilment.&nbsp;Major body of work will be done here prior to production deploy</strong></p>
-
-15
-15
-incomplete
-<span class="placeholder-inline-tasks">Set Confluence label as&nbsp;WIPGreen &nbsp;<strong><span style="color: rgb(255,255,255);">FOU</span></strong></span>
-
-
-16
-16
-incomplete
-<span class="placeholder-inline-tasks">Language and Framework</span>
-
-
-17
-17
-incomplete
-<span class="placeholder-inline-tasks">Security &amp; Privacy</span>
-
-
-18
-18
-incomplete
-<span class="placeholder-inline-tasks">Metrics and Logging</span>
-
-
-19
-19
-incomplete
-<span class="placeholder-inline-tasks">Test plans</span>
-
-Tips..<h3>  Get The Details</h3><p>List your choices of languages, frameworks, service and give a summery of you test plan. There is extra context on this in the <a href="http://skyscanner.atlassian.net/wiki/spaces/DR/pages/143493481/Guidelines+on+designs#Guidelinesondesigns-workinprogress">design guidelines</a>. Remember to include the why.</p><h3>  Skyscanner Standards</h3><p>Reference <a href="https://github.skyscannertools.net/tech-initiatives/production-standards">Our Production Standards</a>. Use MShell (for BE).</p><h3>  Service Instrumentation</h3><p>For reference, here is a recommended level of&nbsp;Service Instrumentation&nbsp;for any production service.</p>#4C9AFF<h3><span style="color: rgb(255,255,255);">Work In Progress</span></h3><h2>Language and Frameworks</h2><p>We&rsquo;ll build magician with Python, basing our Lambda on <a href="https://github.skyscannertools.net/mshell-lambda/mshell-lambda-py3">mshell-lambda-py3</a>.</p><p>We will also make use of <a href="https://pygithub.readthedocs.io/en/stable/">PyGithub</a> (for calls to GitHub Enterprise Server&rsquo;s REST API) and <a href="https://docs.powertools.aws.dev/lambda/python/latest/">Powertools for AWS Lambda</a> (for event handling and data parsing).</p><h2>Security &amp; Privacy</h2><p>Security checklist link: <a href="https://tower.skyscannertools.net/systems/component/28db75eb-9e6f-4aee-b1f7-0589d653006d/overview">https://tower.skyscannertools.net/systems/component/28db75eb-9e6f-4aee-b1f7-0589d653006d/overview</a></p>System JIRAtype,key,summary,Story Points,updated,assignee,reporter,status,resolutionissuetype,issuekey,summary,customfield_10041,updated,assignee,reporter,status,resolution20(&quot;Epic Link&quot;=COPP-6477 OR &quot;Parent Link&quot;=COPP-6477) AND Labels = &quot;Security-Checklist&quot; ORDER BY rank        cbeb7af4-6b44-377d-9c72-f913e24e91b7<h3>Secrets</h3><table ac:local-id="24b3afc5-e50e-4463-8525-5405d3b714da" data-layout="default" data-table-width="1800"><tbody><tr><th><p><strong>Location</strong></p></th><th><p><strong>Name</strong></p></th><th><p><strong>Description</strong></p></th><th><p><strong>Risk of Compromise</strong></p></th></tr><tr><td rowspan="4"><p>mshell-secrets<br />   project: github-magician</p></td><td><p>CLIENT_ID</p></td><td><p>Sequential identifier <em>assigned by GitHub Enterprise Server</em> upon the App&rsquo;s creation.</p><p>Used by magician to distinguish Production and Sandbox deployments.</p></td><td><p> Low - Publicly discernible through <a href="https://github.skyscannertools.net/github-apps/magician">https://github.skyscannertools.net/github-apps/magician</a></p></td></tr><tr><td><p>CLIENT_SECRET</p></td><td><p>Random string <em>generated by GitHub Enterprise Server</em> used to authenticate an App&rsquo;s requests while generating a User Access Token.</p><p><a data-card-appearance="inline" href="https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app">https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/generating-a-user-access-token-for-a-github-app</a> </p></td><td><p> Low - Not used.</p><p>magician&rsquo;s planned functionality doesn&rsquo;t require authenticating as a User.</p><p>Secret compromise wouldn&rsquo;t be useful without also e.g., phishing a colleague into completing an OAuth flow.</p></td></tr><tr><td><p>KEY_PRIVATE</p></td><td><p>RSA key <em>generated by GitHub Enterprise Server</em> used to authenticate requests made as an App Installation.</p><p><a data-card-appearance="inline" href="https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/managing-private-keys-for-github-apps">https://docs.github.com/en/apps/creating-github-apps/authenticating-with-a-github-app/managing-private-keys-for-github-apps</a></p></td><td rowspan="2"><p>  Medium - Allows modifying GitHub repositories.</p><p>All operations can be reversed and are audit logged (via GitHub&rsquo;s audit log / <a href="https://github.skyscannertools.net/stafftools/audit_log?query=data.integration_id%3A209">data.integration_id=209</a> in addition to magician&rsquo;s Cloudwatch logs).</p></td></tr><tr><td><p>WEBHOOK_KEY</p></td><td><p>Random string used to validate webhook events as originating from GitHub.</p><p><a data-card-appearance="inline" href="https://docs.github.com/en/enterprise-server@3.8/webhooks/using-webhooks/securing-your-webhooks">https://docs.github.com/en/enterprise-server@3.8/webhooks/using-webhooks/securing-your-webhooks</a></p></td></tr></tbody></table><h2>Metrics and Logging</h2>:books:1f4da📚#EAE6FF<p>DEVEX: AWS Lambda - Monitoring, testing and notifications </p><p>We expect to make use of AWS Cloudwatch for magician&rsquo;s logging and metrics. We can also find request/response logs for webhook events in GitHub Enterprise Server (<a href="https://docs.github.com/en/enterprise-server@3.8/webhooks/testing-and-troubleshooting-webhooks/testing-webhooks">GitHub Docs</a>).</p><p>We only expect these logs and metrics to be useful for Catalyst debugging.</p><p>We do not expect to replay events from our event logs (beyond debugging) since, in the event of an outage, any disrupted repos should be corrected after magician next receives a webhook (however, should it become necessary, we can resend webhooks from the GitHub App admin panel and retrigger the Lambda - <a href="https://docs.github.com/en/enterprise-server@3.8/webhooks/testing-and-troubleshooting-webhooks/testing-webhooks">GitHub Docs</a>).</p><h2>Test Plan</h2><h3>Automated Testing</h3><p>We run automated unit and integration tests for magician on every build (<a href="https://github.skyscannertools.net/skyscanner/magician/blob/202b0b9c998a8b97a8ec2d00683562f2959ba7f0/.github/workflows/lambda.yaml#L35-L36">.github/workflows/lambda.yaml#L35-L36</a>). These must pass before our branch protection rules allow PRs to be merged.</p><p>While we make use of <a href="https://pygithub.readthedocs.io/en/stable/">PyGithub</a> for some of our requests to GitHub Enterprise Server, we <strong>never</strong> mock/stub it- instead relying on <a href="https://github.com/kiwicom/pytest-recording">pytest-recording</a> to record network requests on developer laptops and replay these on CI. This allows to prove future updates to PyGithub will be a no-op and ensures our unit/integration tests run with zero network access.</p><p>We also use <a href="https://mypy.readthedocs.io/en/stable/">mypy</a> to enforce typehinting and guard against type errors, in addition to black/isort/flake8 for formatting and linting.</p><h3>Manual Testing</h3><p>In addition to magician&rsquo;s production GitHub App, we also have <a href="https://github.skyscannertools.net/github-apps/magician-sandbox">magician (Sandbox)</a> for use on <a href="https://github.skyscannertools.net/skyscnr-test">https://github.skyscannertools.net/skyscnr-test</a>.</p><p>Our Sandbox app points to the latest Lambda deployed to Heritage Sandbox, which happens automatically for every push on a PR.</p><p>This isolation allows us to ensure Research and Development for magician doesn&rsquo;t impact our production environment, while allowing Catalyst&rsquo;s developers to reference real GitHub Enterprise Server events for use as automated testing fixtures.</p><h2>References</h2><ul><li><p><a href="https://tower.skyscannertools.net/systems/component/bd242016-e629-4d30-959c-66e9499fcf45/overview">https://tower.skyscannertools.net/systems/component/bd242016-e629-4d30-959c-66e9499fcf45/overview</a> </p></li><li><p><a href="https://github.skyscannertools.net/skyscanner/magician">https://github.skyscannertools.net/skyscanner/magician</a></p></li><li><p><a href="https://github.skyscannertools.net/github-apps/magician">https://github.skyscannertools.net/github-apps/magician</a></p></li></ul><hr /><p><em><span style="color: rgb(151,160,175);">You can remove this section once all actions have been completed</span></em></p>Instructions..:info:atlassian-info#F4F5F7<p>Info</p><p><strong>Production / Continuous Iteration</strong></p><ul><li><p>Deployment Plan and Dependencies</p></li><li><p>Monitoring &amp; Alerting</p></li><li><p>Set Confluence label as&nbsp;&nbsp;PRODUCTIONGreen </p></li><li><p>Notify stakeholders</p></li><li><p><a data-card-appearance="inline" href="https://skyscanner.atlassian.net/wiki/spaces/SWORG/pages/205226898/The+Software+Delivery+Handbook#Skyscanner%27s-Software-Delivery-Principles">https://skyscanner.atlassian.net/wiki/spaces/SWORG/pages/205226898/The+Software+Delivery+Handbook#Skyscanner%27s-Software-Delivery-Principles</a> </p></li><li><p>Update documents and communication channels with playbooks for maintenance.</p></li></ul><p /><p />Tips..<h3>  Continuous Improvement</h3><p>Keep the document alive and updated with playbooks and make it a manageable service. Keep iterating!</p>#4C9AFF<h3><span style="color: rgb(255,255,255);">Production / Continuous Iteration</span></h3><h2>Deployment Plan</h2><p>We use GitHub Actions to build, test, and package our Lambda (see <a href="https://github.skyscannertools.net/skyscanner/magician/blob/202b0b9c998a8b97a8ec2d00683562f2959ba7f0/.github/workflows/lambda.yaml#L10-L50">.github/workflows/lambda.yaml#L10-L50</a>) before handing off to Slingshot for deployment (through .slingshot.yml - Lambda).</p><p>Understanding GitHub Enterprise Server is single-homed in <code>eu-west-1</code>, we intend to exclusively deploy the magician Lambda to <code>eu-west-1</code>.</p><p>We do not expect any services to call magician besides the webhooks emitted by GitHub Enterprise Server- this is enforced through a HMAC-SHA256 signature check (<a data-card-appearance="inline" href="https://docs.github.com/en/enterprise-server@3.8/webhooks/securing-your-webhooks">https://docs.github.com/en/enterprise-server@3.8/webhooks/securing-your-webhooks</a>, as implemented in <a href="https://github.skyscannertools.net/skyscanner/magician/blob/202b0b9c998a8b97a8ec2d00683562f2959ba7f0/githubmagician/model/webhook_utilities.py">githubmagician/model/webhook_utilities.py</a>).</p><p>We expect magician to exclusively call:</p><ul><li><p>mshell-secrets</p></li><li><p>GitHub Enterprise Server&rsquo;s REST API (using GitHub App credentials, stored in mshell-secrets)</p></li><li><p>Drone (TBC, likely using an IAM service role)</p></li><li><p>Slingshot (TBC, likely using an API key stored in mshell-secrets or using OIDC)</p></li></ul><h2>Dependencies</h2>:info:atlassian-info#F4F5F7<p>Info..</p><p><em><span style="color: rgb(151,160,175);">Create and complete the required Checklists (see example </span></em><em><span style="color: rgb(151,160,175);">here</span></em><em><span style="color: rgb(151,160,175);">):</span></em></p><ol start="1"><li><p><em><span style="color: rgb(151,160,175);">Create a new </span></em><a href="https://confluence.skyscannertools.net/download/attachments/155431064/image2019-9-18_14-43-52.png?version=1&amp;modificationDate=1568814232046&amp;api=v2"><em><span style="color: rgb(151,160,175);">Confluence page from a template</span></em></a></p></li><li><p><em><span style="color: rgb(151,160,175);">Save the relevant templates as a child page of the Design Review template</span></em></p></li><li><p><em><span style="color: rgb(151,160,175);">Complete the tables for Internal and External dependencies and include a link to this page.</span></em></p></li></ol><h2>Monitoring and Alerting</h2><p><em><span style="color: rgb(151,160,175);">If new subsystems or services that need new monitoring and alerting configured are part of the design, describe what is being monitored and the conditions that trigger the alerts. If possible, include links to the Dasboards and Bosun Alerts created.</span></em></p><p><em><span style="color: rgb(151,160,175);">Is there a runbook/playbook that provides diagnostic/troubleshooting instructions? Are all alert conditions listed in the playbook?&nbsp; If possible, share a link to the playbook.</span></em></p><p><em><span style="color: rgb(151,160,175);">For reference, here is a recommended level of Service Instrumentation for any production service.</span></em></p><p>We understand we can make use of Bosun&rsquo;s Cloudwatch support to alert on e.g., a sudden rise of invocation exceptions.</p><p>Once magician has been fully implemented and routinely receives webhooks from GitHub Enterprise Server, we&rsquo;d like to leverage Slingshot - Metrics Checks to ensure we automatically rollback if a release causes our error rate to rise.</p><p>In an effort to distinguish our Lambda as technology and avoid confusion with magic, we publish <a href="https://docs.github.com/en/enterprise-server@3.8/rest/commits/statuses">commit statuses</a> on <code>push</code> events- these help inform developers about magician&rsquo;s effects (and any unexpected failures).</p><p /><p />
+data = """
+{
+    "results": [
+        {
+            "id": "1364722844",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "712020:18682b8d-c1c4-432b-8a74-b72ad9e829d9",
+                "createdAt": "2025-05-06T14:09:29.345Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>using AWS <strong><u>service managed</u></strong> admin role</p>"
+                }
+            },
+            "resolutionStatus": "resolved",
+            "resolutionLastModifierId": "70121:beb06c0a-3e04-4284-8d93-296e45ec14b8",
+            "resolutionLastModifiedAt": "2025-05-08T11:11:51.457Z",
+            "properties": {
+                "inlineMarkerRef": "7865e09b-1486-4671-8e68-5fd79fe94640",
+                "inlineOriginalSelection": "deploying stacks of default resources",
+                "inline-marker-ref": "7865e09b-1486-4671-8e68-5fd79fe94640",
+                "inline-original-selection": "deploying stacks of default resources"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1364722844"
+            }
+        },
+        {
+            "id": "1365253709",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:045cf23e-02d1-4092-8e52-ec7107f31052",
+                "createdAt": "2025-05-07T09:14:39.291Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>Is the intent behind including Slingshot so that these accounts can then be used for deploying Slingshotted IaC/CloudFormation? </p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "91c304dc-013b-4317-a6d5-50784dae29eb",
+                "inlineOriginalSelection": "Slingshot",
+                "inline-marker-ref": "91c304dc-013b-4317-a6d5-50784dae29eb",
+                "inline-original-selection": "Slingshot"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365253709"
+            }
+        },
+        {
+            "id": "1365253772",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "6408e0e34d5e4b44e234cdcc",
+                "createdAt": "2025-05-07T09:16:22.505Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>Not security specific, but I don't see any mentions to cost governance. Are there going to be any controls to prevent overspending?</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "095257cc-112e-4f85-aa0e-2590b81f969c",
+                "inlineOriginalSelection": "Governance of newly provisioned accounts",
+                "inline-marker-ref": "095257cc-112e-4f85-aa0e-2590b81f969c",
+                "inline-original-selection": "Governance of newly provisioned accounts"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365253772"
+            }
+        },
+        {
+            "id": "1365319590",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:18:19.714Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>Wouldn&rsquo;t a gitops solution be more reasonable given that this accounts will have a squad as owner and would benefit from having catalogs?</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "b42a6b85-8769-499d-b009-517650979dd8",
+                "inlineOriginalSelection": "use Self Service",
+                "inline-marker-ref": "b42a6b85-8769-499d-b009-517650979dd8",
+                "inline-original-selection": "use Self Service"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365319590"
+            }
+        },
+        {
+            "id": "1365351560",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:18:38.556Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>why?</p>"
+                }
+            },
+            "resolutionStatus": "resolved",
+            "resolutionLastModifierId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+            "resolutionLastModifiedAt": "2025-05-07T09:24:47.842Z",
+            "properties": {
+                "inlineMarkerRef": "3d88a88b-4e92-4324-bdd3-d9131c5ab160",
+                "inlineOriginalSelection": "randomly generated name",
+                "inline-marker-ref": "3d88a88b-4e92-4324-bdd3-d9131c5ab160",
+                "inline-original-selection": "randomly generated name"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365351560"
+            }
+        },
+        {
+            "id": "1365319669",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:045cf23e-02d1-4092-8e52-ec7107f31052",
+                "createdAt": "2025-05-07T09:19:39.006Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>I&rsquo;m slightly confused, or missing something in this DR, but with the StackSets would all of the bellow resources need to be defined in a new PoC-specific CloudFormation template? Does that piece of work itself need some design as well?</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "4aa3c420-cc87-4ffd-87a1-6fe75b94989d",
+                "inlineOriginalSelection": "default resources",
+                "inline-marker-ref": "4aa3c420-cc87-4ffd-87a1-6fe75b94989d",
+                "inline-original-selection": "default resources"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365319669"
+            }
+        },
+        {
+            "id": "1365351617",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 2,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:20:35.952Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>This looks like a design flaw. Given how uncommon this are, if we fail to process this events correctly we could fail to clean up. A scheduled batch/lambda running daily (with proper alerting and metrics) would likely be a safer choice.</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "2b6678c7-3fb7-4c8a-92a8-16a64823d150",
+                "inlineOriginalSelection": "two EventBridge events",
+                "inline-marker-ref": "2b6678c7-3fb7-4c8a-92a8-16a64823d150",
+                "inline-original-selection": "two EventBridge events"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365351617"
+            }
+        },
+        {
+            "id": "1365254123",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:21:33.978Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>What&rsquo;s the IAM scaffolding we&rsquo;re gonna use to make this possible?</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "3f7bd752-9b01-4ffc-8b99-75e186cb4981",
+                "inlineOriginalSelection": "User is now able to log in using the near-admin role and use the account.",
+                "inline-marker-ref": "3f7bd752-9b01-4ffc-8b99-75e186cb4981",
+                "inline-original-selection": "User is now able to log in using the near-admin role and use the account."
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365254123"
+            }
+        },
+        {
+            "id": "1365286747",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:23:35.242Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>Could we explicitly explain what OU structure we&rsquo;ll create to host this accounts and what SCPs will there be by default?</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "c4d9670b-d1cc-41d0-84c8-a1ffad1816ae",
+                "inlineOriginalSelection": "new account",
+                "inline-marker-ref": "c4d9670b-d1cc-41d0-84c8-a1ffad1816ae",
+                "inline-original-selection": "new account"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365286747"
+            }
+        },
+        {
+            "id": "1365286779",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:24:24.108Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>It might be useful to include a few actual use cases where this would be useful.</p>"
+                }
+            },
+            "resolutionStatus": "resolved",
+            "resolutionLastModifierId": "70121:beb06c0a-3e04-4284-8d93-296e45ec14b8",
+            "resolutionLastModifiedAt": "2025-05-08T10:49:41.411Z",
+            "properties": {
+                "inlineMarkerRef": "a9c29376-bb80-47d0-9a24-79fc55e17d64",
+                "inlineOriginalSelection": "PoC accounts",
+                "inline-marker-ref": "a9c29376-bb80-47d0-9a24-79fc55e17d64",
+                "inline-original-selection": "PoC accounts"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365286779"
+            }
+        },
+        {
+            "id": "1365319938",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:26:53.259Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>All of this are quite simple to check before creating the account.</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "f258e2d6-7ceb-424f-8685-62f576acb2fd",
+                "inlineOriginalSelection": "Selected name may not be uniqueName selected may be in use by a previous account which is still in the process of deletion, even if it appears availableRisk of chosen name + general prefix exceeding AD character limit",
+                "inline-marker-ref": "f258e2d6-7ceb-424f-8685-62f576acb2fd",
+                "inline-original-selection": "Selected name may not be uniqueName selected may be in use by a previous account which is still in the process of deletion, even if it appears availableRisk of chosen name + general prefix exceeding AD character limit"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365319938"
+            }
+        },
+        {
+            "id": "1365286872",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 2,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T12:59:11.881Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>Simplifying creation to make it a 1-click solution makes every single action in the next 90 days harder as finding the right account won&rsquo;t be trivial being identified only by a random number and random name.</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "1fb026a7-6486-41fd-967d-0e80682dbdbf",
+                "inlineOriginalSelection": "Tracking more difficult",
+                "inline-marker-ref": "1fb026a7-6486-41fd-967d-0e80682dbdbf",
+                "inline-original-selection": "Tracking more difficult"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365286872"
+            }
+        },
+        {
+            "id": "1365286898",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:28:29.641Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>Missing con: You can&rsquo;t have 2 PoCs for a single project at the same time.</p>"
+                }
+            },
+            "resolutionStatus": "resolved",
+            "resolutionLastModifierId": "70121:beb06c0a-3e04-4284-8d93-296e45ec14b8",
+            "resolutionLastModifiedAt": "2025-05-08T13:45:55.091Z",
+            "properties": {
+                "inlineMarkerRef": "3d3b0b8c-a756-449b-aa24-9dd22e701db5",
+                "inlineOriginalSelection": "project name",
+                "inline-marker-ref": "3d3b0b8c-a756-449b-aa24-9dd22e701db5",
+                "inline-original-selection": "project name"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365286898"
+            }
+        },
+        {
+            "id": "1365286935",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "557058:ae23886d-640f-4eca-bc0e-c1768b18c19b",
+                "createdAt": "2025-05-07T09:29:33.872Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>Do we have a reason for going for account deletion over (for instance), wiping an account back to a base zero cost level and keeping it in a warm pool?</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "6b56bb5f-2546-43f2-a0d9-0f9790c918b5",
+                "inlineOriginalSelection": "deletion",
+                "inline-marker-ref": "6b56bb5f-2546-43f2-a0d9-0f9790c918b5",
+                "inline-original-selection": "deletion"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365286935"
+            }
+        },
+        {
+            "id": "1365320122",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:31:07.016Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>Organisations API + Stack Sets are also new technologies. Terraform on the other hand is widely used across the business.</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "8732c9f1-6fda-43f7-ad0e-0bbc7133f130",
+                "inlineOriginalSelection": "new technology",
+                "inline-marker-ref": "8732c9f1-6fda-43f7-ad0e-0bbc7133f130",
+                "inline-original-selection": "new technology"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365320122"
+            }
+        },
+        {
+            "id": "1365254921",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:31:23.824Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>Why is this bad?</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "4bc29ca8-9f16-4ef9-af68-f668567c7b28",
+                "inlineOriginalSelection": "Requires PR workflows",
+                "inline-marker-ref": "4bc29ca8-9f16-4ef9-af68-f668567c7b28",
+                "inline-original-selection": "Requires PR workflows"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365254921"
+            }
+        },
+        {
+            "id": "1365254978",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:32:02.317Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>Can&rsquo;t we create a PR automatically at the right time?</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "e683b1bd-599f-465e-9b78-8e51793f761a",
+                "inlineOriginalSelection": "Cleanup of account definition after automated deletion",
+                "inline-marker-ref": "e683b1bd-599f-465e-9b78-8e51793f761a",
+                "inline-original-selection": "Cleanup of account definition after automated deletion"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365254978"
+            }
+        },
+        {
+            "id": "1365352467",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:32:58.869Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>This is a con, it means you&rsquo;ll be creating infrastructure without the possibility of peer review.</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "2a192518-89d0-4814-b211-42694b05de3c",
+                "inlineOriginalSelection": "Doesn't require PR workflows",
+                "inline-marker-ref": "2a192518-89d0-4814-b211-42694b05de3c",
+                "inline-original-selection": "Doesn't require PR workflows"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365352467"
+            }
+        },
+        {
+            "id": "1365320218",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T09:33:43.919Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>How are we going to deploy the slingshot/cfripper/&hellip; primitives that are currently strata based?</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "a9811777-a26c-4b65-9cb8-19a54dbe9fed",
+                "inlineOriginalSelection": "Custom solution",
+                "inline-marker-ref": "a9811777-a26c-4b65-9cb8-19a54dbe9fed",
+                "inline-original-selection": "Custom solution"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365320218"
+            }
+        },
+        {
+            "id": "1365361972",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "70121:63605fc5-aafb-402c-87ba-466682824f5f",
+                "createdAt": "2025-05-07T13:24:30.254Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>This would be interesting to fill</p>"
+                }
+            },
+            "resolutionStatus": "resolved",
+            "resolutionLastModifierId": "70121:beb06c0a-3e04-4284-8d93-296e45ec14b8",
+            "resolutionLastModifiedAt": "2025-05-13T13:07:23.950Z",
+            "properties": {
+                "inlineMarkerRef": "ccae483d-9558-4e53-8845-bc0c9f702e28",
+                "inlineOriginalSelection": "Operational Metrics",
+                "inline-marker-ref": "ccae483d-9558-4e53-8845-bc0c9f702e28",
+                "inline-original-selection": "Operational Metrics"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1365361972"
+            }
+        },
+        {
+            "id": "1368670362",
+            "status": "current",
+            "title": "Re: PoC Account Vending - Design Review",
+            "pageId": "1362950472",
+            "version": {
+                "number": 1,
+                "message": "",
+                "minorEdit": false,
+                "authorId": "6061e38d610003006804744c",
+                "createdAt": "2025-05-13T12:37:09.915Z"
+            },
+            "body": {
+                "storage": {
+                    "representation": "storage",
+                    "value": "<p>Anything else needing thought of in here to &ldquo;keep our house in order&rdquo;? Just thinking about stuff that falls down the back of the sofa e.g. AD groups, projects, self service config, other repo config etc.</p>"
+                }
+            },
+            "resolutionStatus": "open",
+            "properties": {
+                "inlineMarkerRef": "d083d3e5-0b56-4616-8d4c-ce62f8ca56ff",
+                "inlineOriginalSelection": "deprovision the account",
+                "inline-marker-ref": "d083d3e5-0b56-4616-8d4c-ce62f8ca56ff",
+                "inline-original-selection": "deprovision the account"
+            },
+            "_links": {
+                "webui": "/spaces/CAS/pages/1362950472/PoC+Account+Vending+-+Design+Review?focusedCommentId=1368670362"
+            }
+        }
+    ],
+    "_links": {
+        "base": "https://skyscanner.atlassian.net/wiki"
+    }
+}
 """
 
-# markdowned = md(html)
-# markdowned = html2text.html2text(html)
-text_maker = html2text.HTML2Text()
-
-text_maker.unicode_snob = True
-text_maker.mark_code = True
-text_maker.ignore_images = True
-
-text = text_maker.handle(html)
-print(text)
+data = json.loads(data)
+print(data)
+comments = []
+for c in data['results']:
+    excerpt = c.get('properties', {}).get('inlineOriginalSelection')
+    comment = c.get('body', {}).get('storage', {}).get('value')
+    if excerpt and comment:
+        comments.append({
+            "Excerpt": excerpt,
+            "Comment": comment
+        })
+print(comments)
