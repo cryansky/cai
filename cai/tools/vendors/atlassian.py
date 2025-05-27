@@ -14,6 +14,7 @@ from langchain_community.document_loaders import ConfluenceLoader
 CONFLUENCE_URL = os.getenv("CONFLUENCE_URL") 
 CONFLUENCE_USER = os.getenv("CONFLUENCE_USER")
 CONFLUENCE_API_TOKEN = os.getenv("CONFLUENCE_API_TOKEN")
+CONFLUENCE_SEARCH_SPACE = os.getenv("CONFLUENCE_SEARCH_SPACE")
 
 if all([CONFLUENCE_URL, CONFLUENCE_USER, CONFLUENCE_API_TOKEN]):
     auth = HTTPBasicAuth(CONFLUENCE_USER, CONFLUENCE_API_TOKEN)
@@ -64,13 +65,12 @@ def _remove_confluence_namespaced_tags(text):
 
     return text
 
-def search_confluence(query: str, space_key: str = None, max_pages: int = 5):
+def search_confluence(query: str, max_pages: int = 5):
     """
-    Search Confluence pages using LangChain's ConfluenceLoader.
+    Search Confluence pages based on search keywords or phrase.
 
     Args:
         query (str): Search keywords or phrase.
-        space_key (str, optional): Limit search to this space.
         max_pages (int): Maximum number of pages to return.
 
     Returns:
@@ -79,12 +79,18 @@ def search_confluence(query: str, space_key: str = None, max_pages: int = 5):
     if not all([CONFLUENCE_URL, CONFLUENCE_USER, CONFLUENCE_API_TOKEN]):
         return [{"error": "Confluence credentials missing"}]
 
+    cql = (
+        f'(type = "page" OR type = "blogpost") '
+        f'AND space = "{CONFLUENCE_SEARCH_SPACE}" '
+        f'AND (title ~ "{query}" OR text ~ "{query}") '
+        'ORDER BY lastmodified DESC'
+    )
+    
     loader = ConfluenceLoader(
         url=CONFLUENCE_URL,
         username=CONFLUENCE_USER,
         api_key=CONFLUENCE_API_TOKEN,
-        cql=f'text ~ "{query}"',
-        space_key=space_key,
+        cql=cql,
         max_pages=max_pages,
         include_attachments=False,
         keep_markdown_format=True
@@ -96,11 +102,10 @@ def search_confluence(query: str, space_key: str = None, max_pages: int = 5):
         for doc in docs:
             content = doc.page_content
             metadata = doc.metadata
-            clean_text = _normalize_markdown(content)
             results.append({
                 "title": metadata.get("title", ""),
                 "url": metadata.get("source", ""),
-                "text": clean_text
+                "text": content
             })
         return results
     except Exception as e:
@@ -161,8 +166,7 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
         excerpt = _normalize_markdown(excerpt)
 
         n_match = page_body.count(excerpt)
-        if not n_match:
-            return "Excerpt not found in page content."
+        n_match = n_match if n_match else 1
         
         comment_url = f"{CONFLUENCE_URL}/wiki/api/v2/inline-comments"
         for m in range(n_match):

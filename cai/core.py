@@ -768,7 +768,7 @@ class CAI:  # pylint: disable=too-many-instance-attributes
                 except KeyboardInterrupt:
                     print("\nCtrl+C pressed")
                     raw_result = ("\n\nCOMMAND INTERRUPTED by user, "
-                                  "probably cause you are bad")
+                                  "do better next time!")
                     return raw_result
                 except TypeError as e:
                     if "unexpected keyword argument" in str(
