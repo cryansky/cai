@@ -9,6 +9,7 @@ from requests.auth import HTTPBasicAuth
 import html
 import json
 import html2text
+from langchain_community.document_loaders import ConfluenceLoader
 
 CONFLUENCE_URL = os.getenv("CONFLUENCE_URL") 
 CONFLUENCE_USER = os.getenv("CONFLUENCE_USER")
@@ -24,7 +25,7 @@ else:
     auth = None
     headers = {}
 
-def _strip_markdown(md_text: str) -> str:
+def _normalize_markdown(md_text: str) -> str:
     """
     Strips common Markdown syntax and returns plain visible text.
     """
@@ -34,6 +35,7 @@ def _strip_markdown(md_text: str) -> str:
     text = re.sub(r'\*([^*]+)\*', r'\1', text)         # *italic*
     text = re.sub(r'__([^_]+)__', r'\1', text)         # __bold__
     text = re.sub(r'_([^_]+)_', r'\1', text)           # _italic_
+    text = re.sub(r'\s+', ' ', text)                   # normalize all whitespaces
 
     # Remove headings
     text = re.sub(r'^#{1,6}\s*', '', text, flags=re.MULTILINE)
@@ -62,6 +64,48 @@ def _remove_confluence_namespaced_tags(text):
 
     return text
 
+def search_confluence(query: str, space_key: str = None, max_pages: int = 5):
+    """
+    Search Confluence pages using LangChain's ConfluenceLoader.
+
+    Args:
+        query (str): Search keywords or phrase.
+        space_key (str, optional): Limit search to this space.
+        max_pages (int): Maximum number of pages to return.
+
+    Returns:
+        list: List of dicts {title, url, text}
+    """
+    if not all([CONFLUENCE_URL, CONFLUENCE_USER, CONFLUENCE_API_TOKEN]):
+        return [{"error": "Confluence credentials missing"}]
+
+    loader = ConfluenceLoader(
+        url=CONFLUENCE_URL,
+        username=CONFLUENCE_USER,
+        api_key=CONFLUENCE_API_TOKEN,
+        cql=f'text ~ "{query}"',
+        space_key=space_key,
+        max_pages=max_pages,
+        include_attachments=False,
+        keep_markdown_format=True
+    )
+
+    try:
+        docs = loader.load()
+        results = []
+        for doc in docs:
+            content = doc.page_content
+            metadata = doc.metadata
+            clean_text = _normalize_markdown(content)
+            results.append({
+                "title": metadata.get("title", ""),
+                "url": metadata.get("source", ""),
+                "text": clean_text
+            })
+        return results
+    except Exception as e:
+        return [{"error": str(e)}]
+
 def read_confluence_page(page_id: str) -> str:
     """
     Retrieves the plain text content of a Confluence page using its page ID.
@@ -76,21 +120,20 @@ def read_confluence_page(page_id: str) -> str:
         return "Confluence credentials are missing or invalid."
 
     try:
-        page_detail_url = f"{CONFLUENCE_URL}/wiki/api/v2/pages/{page_id}?body-format=storage"
-        response = requests.get(page_detail_url, headers=headers, auth=auth)
-        response.raise_for_status()
-
-        page_body = response.json()["body"]["storage"]["value"]
-        page_body = _remove_confluence_namespaced_tags(page_body)
-
-        text_maker = html2text.HTML2Text()
-        text_maker.unicode_snob = True
-        text_maker.mark_code = True
-        text_maker.ignore_images = True
-        text = text_maker.handle(page_body)
-
-        return text
-
+        loader = ConfluenceLoader(
+            url=CONFLUENCE_URL,
+            username=CONFLUENCE_USER,
+            api_key=CONFLUENCE_API_TOKEN,
+            page_ids=[page_id],
+            keep_markdown_format=True,
+            max_pages=1
+        )
+        docs = loader.load()
+        if docs:
+            content = docs[0].page_content
+            return content
+        else:
+            return "Page not found."
     except requests.exceptions.HTTPError as e:
         return f"HTTP error: {e} — {e.response.text}"
     except Exception as e:
@@ -112,29 +155,31 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
         return "Confluence credentials are missing or invalid."
 
     try:
-        # page_body = read_confluence_page(page_id)
-        # match = page_body.find(excerpt)
+        page_body = read_confluence_page(page_id)
 
-        # if not match:
-        #     return "Excerpt not found in page content. Cannot create inline comment."
+        page_body = _normalize_markdown(page_body)
+        excerpt = _normalize_markdown(excerpt)
 
-        # excerpt = _strip_html_to_text(excerpt)
-        excerpt = _strip_markdown(excerpt)
+        n_match = page_body.count(excerpt)
+        if not n_match:
+            return "Excerpt not found in page content."
         
         comment_url = f"{CONFLUENCE_URL}/wiki/api/v2/inline-comments"
-        payload = {
-            "pageId": page_id,
-            "body": {
-                "representation": "storage",
-                "value": f"<p>{html.escape(comment)}</p>"
-            },
-            "inlineCommentProperties": {
-                "textSelection": excerpt,
-                "textSelectionMatchCount": 1,
-                "textSelectionMatchIndex": 0
+        for m in range(n_match):
+            payload = {
+                "pageId": page_id,
+                "body": {
+                    "representation": "storage",
+                    "value": f"<p>{html.escape(comment)}</p>"
+                },
+                "inlineCommentProperties": {
+                    "textSelection": excerpt,
+                    "textSelectionMatchCount": n_match,
+                    "textSelectionMatchIndex": m
+                }
             }
-        }
-        
+            print(json.dumps(payload))
+
         post_resp = requests.post(comment_url, headers=headers, auth=auth, data=json.dumps(payload))
         post_resp.raise_for_status()
         comment_id = post_resp.json().get("id", "unknown")
