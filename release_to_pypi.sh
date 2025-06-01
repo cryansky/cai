@@ -3,12 +3,14 @@ set -e
 
 echo "Preparing cai-framework for PyPI release..."
 
-# Ensure we have the latest build tools
-pip install --upgrade pip setuptools wheel twine build
 
-# Check if setup.cfg exists
-if [ ! -f "setup.cfg" ]; then
-    echo "ERROR: setup.cfg is missing"
+# Install required build tools without upgrading pip
+# pip install --upgrade pip setuptools wheel twine build
+pip install setuptools wheel twine build
+
+# Check if pyproject.toml exists
+if [ ! -f "pyproject.toml" ]; then
+    echo "ERROR: pyproject.toml is missing"
     exit 1
 fi
 
@@ -20,7 +22,9 @@ if [ ! -f "README.md" ]; then
 fi
 
 # Clean previous builds
-rm -rf build/ dist/ *.egg-info/
+rm -rf build/ dist/ *.egg-info/ .eggs/
+# Also clean any cached build files
+rm -rf src/*.egg-info/
 
 # Build the package
 echo "Building package..."

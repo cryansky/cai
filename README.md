@@ -173,7 +173,7 @@ python3.12 -m venv cai_env
 source cai_env/bin/activate && pip install cai-framework
 
 # Generate a .env file and set up with defaults
-echo -e 'OPENAI_API_KEY="sk-1234"\nANTHROPIC_API_KEY=""\nOLLAMA=""\nPROMPT_TOOLKIT_NO_CPR=1' > .env
+echo -e 'OPENAI_API_KEY="sk-1234"\nANTHROPIC_API_KEY=""\nOLLAMA=""\nPROMPT_TOOLKIT_NO_CPR=1\nCAI_STREAM=false' > .env
 
 # Launch CAI
 cai  # first launch it can take up to 30 seconds
@@ -195,7 +195,7 @@ python3.12 -m venv cai_env
 source cai_env/bin/activate && pip install cai-framework
 
 # Generate a .env file and set up with defaults
-echo -e 'OPENAI_API_KEY="sk-1234"\nANTHROPIC_API_KEY=""\nOLLAMA=""\nPROMPT_TOOLKIT_NO_CPR=1' > .env
+echo -e 'OPENAI_API_KEY="sk-1234"\nANTHROPIC_API_KEY=""\nOLLAMA=""\nPROMPT_TOOLKIT_NO_CPR=1\nCAI_STREAM=false' > .env
 
 # Launch CAI
 cai  # first launch it can take up to 30 seconds
@@ -218,7 +218,7 @@ python3 -m venv cai_env
 source cai_env/bin/activate && pip install cai-framework
 
 # Generate a .env file and set up with defaults
-echo -e 'OPENAI_API_KEY="sk-1234"\nANTHROPIC_API_KEY=""\nOLLAMA=""\nPROMPT_TOOLKIT_NO_CPR=1' > .env
+echo -e 'OPENAI_API_KEY="sk-1234"\nANTHROPIC_API_KEY=""\nOLLAMA=""\nPROMPT_TOOLKIT_NO_CPR=1\nCAI_STREAM=false' > .env
 
 # Launch CAI
 cai  # first launch it can take up to 30 seconds
@@ -742,14 +742,18 @@ Currently, the extensions are not available as they have been (largely) integrat
 
 ### :information_source: Usage Data Collection
 
-CAI is provided free of charge for researchers. Instead of payment for research use cases, we ask you to contribute to the CAI community by allowing usage data collection. This data helps us understand how the framework is being used, identify areas for improvement, and prioritize new features. The collected data includes:
+CAI is provided free of charge for researchers. To improve CAI’s detection accuracy and publish open security research, instead of payment for research use cases, we ask you to contribute to the CAI community by allowing usage data collection. This data helps us identify areas for improvement, understand how the framework is being used, and prioritize new features. Legal basis of data collection is under Art. 6 (1)(f) GDPR — CAI’s legitimate interest in maintaining and improving security tooling, with Art. 89 safeguards for research. The collected data includes:
 
 - Basic system information (OS type, Python version)
 - Username and IP information
 - Tool usage patterns and performance metrics
 - Model interactions and token usage statistics
 
-We take your privacy seriously and only collect what's needed to make CAI better.
+We take your privacy seriously and only collect what's needed to make CAI better. For further info, reach out to research＠aliasrobotics.com. You can disable some of the data collection features via the `CAI_TELEMETRY` environment variable but we encourage you to keep it enabled and contribute back to research:
+
+```bash
+CAI_TELEMETRY=False cai
+```
 
 ### Reproduce CI-Setup locally
 
@@ -853,7 +857,7 @@ curl -v http://host.docker.internal:8000/api/version
 
 ![cai-004-first-message](imgs/readme_imgs/cai-004-first-message.png)
 
-The starting user prompt in this case is: `Target IP: 192.168.2.10, perform a full network scan`.
+The starting user prompt in this case is: `Target IP: 192.168.3.10, perform a full network scan`.
 
 The agent started performing a nmap scan. You could either interact with the agent and give it more instructions, or let it run to see what it explores next.
 </details>
@@ -942,16 +946,6 @@ Currently, CAI supports text based information. You can add any extra informatio
 **How?** By adding it to the system ([`system_master_template.md`](cai/repl/templates/system_master_template.md)) or the user prompt ([`user_master_template.md`](cai/repl/templates/user_master_template.md)). You can always directly prompt the path to the model, and it will ```cat``` it.
 </details>
 
-<details>
-<summary>How can I access Ollama running on Windows from cai running on WSL?</summary>
-If you're running **Ollama on a Windows host** and want to access it from cai inside **WSL**, follow these steps:
-
-1. **Allow inbound traffic on port `11434` in Windows Firewall**:  
-   Run in PowerShell as Administrator:
-   New-NetFirewallRule -DisplayName "Allow Ollama Port 11434" -Direction Inbound -LocalPort 11434 -Protocol TCP -Action Allow
-2. **Enable port forwarding from 0.0.0.0 to localhost**:
-    netsh interface portproxy add v4tov4 listenport=11434 listenaddress=0.0.0.0 connectport=11434 connectaddress=127.0.0.1
-</details> 
 
 
 ## Citation
@@ -970,7 +964,7 @@ If you want to cite our work, please use the following format
 
 ## Acknowledgements
 
-CAI was initially developed by [Alias Robotics](https://aliasrobotics.com) and co-funded by the European EIC accelerator project RIS (GA 101161136) - HORIZON-EIC-2023-ACCELERATOR-01 call. The original agentic principles are inspired from OpenAI's [`swarm`](https://github.com/openai/swarm) library. This project also makes use of other relevant open source building blocks including [`LiteLLM`](https://github.com/BerriAI/litellm), and [`phoenix`](https://github.com/Arize-ai/phoenix)
+CAI was initially developed by [Alias Robotics](https://aliasrobotics.com) and co-funded by the European EIC accelerator project RIS (GA 101161136) - HORIZON-EIC-2023-ACCELERATOR-01 call. The original agentic principles are inspired from OpenAI's [`swarm`](https://github.com/openai/swarm) library and translated into newer prototypes. This project also makes use of other relevant open source building blocks including [`LiteLLM`](https://github.com/BerriAI/litellm), and [`phoenix`](https://github.com/Arize-ai/phoenix)
 
 
 <!-- Footnotes -->
