@@ -48,23 +48,24 @@ where:
 import os
 import pkgutil
 import importlib
-from cai.sdk.agents import Agent
-from cai.sdk.agents.handoffs import handoff
 
-from typing import Dict
+from typing import Dict, Optional
 
 # Local application imports
 from cai.agents.flag_discriminator import (
     flag_discriminator,
     transfer_to_flag_discriminator
 )
+from cai.state.pydantic import state_agent
+from cai.types import Agent
+
 from dotenv import load_dotenv  # pylint: disable=import-error # noqa: E501
 
 # Extend the search path for namespace packages (allows merging)
 __path__ = pkgutil.extend_path(__path__, __name__)
 
 # Get model from environment or use default
-model = os.getenv('CAI_MODEL', "alias0")
+model = os.getenv('CAI_MODEL', "qwen2.5:14b")
 
 
 PATTERNS = [
@@ -75,20 +76,27 @@ PATTERNS = [
     "recursive"
 ]
 
+# Global agent registry might be populated by get_available_agents
+_agent_registry: Dict[str, Agent] = {}
 
-def get_available_agents() -> Dict[str, Agent]:  # pylint: disable=R0912  # noqa
+def get_available_agents() -> Dict[str, Agent]:
     """
-    Get a dictionary of all available agents compiled
-    from the cai/agents folder.
-
-    Returns:
-        Dictionary mapping agent names to Agent instances
+    Scans the agents directory and returns a dictionary of available agents.
+    Populates the global _agent_registry.
     """
+    global _agent_registry
     agents_to_display = {}
 
     # # First, add all agents from AVAILABLE_AGENTS
     # for name, agent in AVAILABLE_AGENTS.items():
     #     agents_to_display[name] = agent
+
+    # Add multi-type agent if available
+    try:
+        if "state" not in agents_to_display:
+            agents_to_display["state"] = transfer_to_state_agent()
+    except (ImportError, AttributeError):
+        pass
 
     # Try to import all agents from the agents folder
     for _, name, _ in pkgutil.iter_modules(__path__,
@@ -104,7 +112,8 @@ def get_available_agents() -> Dict[str, Agent]:  # pylint: disable=R0912  # noqa
                     agent_name = attr_name
                     if agent_name not in agents_to_display:
                         agents_to_display[agent_name] = attr
-        except (ImportError, AttributeError):
+        except (ImportError, AttributeError) as e:
+            print(e)
             pass
 
     # Also check the patterns subdirectory
@@ -123,9 +132,10 @@ def get_available_agents() -> Dict[str, Agent]:  # pylint: disable=R0912  # noqa
                         agent_name = attr_name
                         if agent_name not in agents_to_display:
                             agents_to_display[agent_name] = attr
-            except (ImportError, AttributeError) as e:
-                print(f"Error importing {agent_name}: {e}")
+            except (ImportError, AttributeError):
+                pass
 
+    _agent_registry = agents_to_display # Store the loaded agents
     return agents_to_display
 
 
@@ -139,7 +149,7 @@ def get_agent_module(agent_name: str) -> str:
 
     Returns:
         The full module name where the agent
-        is defined (e.g., 'cai.sdk.agents.basic')
+        is defined (e.g., 'cai.agents.basic')
     """
     # Try to import all agents from the agents folder
     for _, name, _ in pkgutil.iter_modules(__path__,
@@ -174,58 +184,47 @@ def get_agent_module(agent_name: str) -> str:
     return "unknown"
 
 
-def get_agent_by_name(agent_name: str) -> Agent:
+def transfer_to_state_agent():
     """
-    Get an agent instance by name.
-    
-    Args:
-        agent_name: Name of the agent to retrieve
-        
-    Returns:
-        Agent instance corresponding to the given name
-        
-    Raises:
-        ValueError: If the agent name is not found
+    Transfer to the state agent
     """
-    # Get all available agents from the agents module
-    available_agents = get_available_agents()
-    
-    # Convert agent_name to lowercase for case-insensitive comparison
-    agent_name = agent_name.lower()
-    
-    # Check if the agent exists in available_agents
-    if agent_name not in available_agents:
-        raise ValueError(f"Invalid agent type: {agent_name}. Available agents: {', '.join(available_agents.keys())}")
-    
-    # Get the agent instance
-    agent = available_agents[agent_name]
-    
-    # # Special handling for one_tool agent
-    # if agent_name == "one_tool_agent":
-    #     from cai.sdk.agents.one_tool import one_tool_agent
-        
-    #     # Create handoffs between agents
-    #     # Add a handoff from one_tool_agent to flag_discriminator
-    #     flag_discriminator_handoff = handoff(
-    #         flag_discriminator,
-    #         tool_name_override="transfer_to_flag_discriminator",
-    #         tool_description_override="Transfer control to the flag discriminator agent"
-    #     )
-        
-    #     # Add a handoff from flag_discriminator to one_tool_agent
-    #     one_tool_agent_handoff = handoff(
-    #         one_tool_agent,
-    #         tool_name_override="transfer_to_one_tool_agent",
-    #         tool_description_override="Transfer control back to the one tool agent"
-    #     )
-        
-    #     # Add handoffs to agent.handoffs lists
-    #     if not hasattr(agent, 'handoffs'):
-    #         agent.handoffs = []
-    #     if not hasattr(flag_discriminator, 'handoffs'):
-    #         flag_discriminator.handoffs = []
-            
-    #     agent.handoffs.append(flag_discriminator_handoff)
-    #     flag_discriminator.handoffs.append(one_tool_agent_handoff)
-    
-    return agent
+    return state_agent
+
+
+def get_agent_by_name(agent_name: str) -> Optional[Agent]:
+    """
+    Retrieves an agent instance by its registered name.
+    Ensures the registry is populated if it's empty.
+    """
+    if not _agent_registry:
+        get_available_agents() # Populate the registry if needed
+    return _agent_registry.get(agent_name)
+
+
+########################################################
+# MAIN
+########################################################
+load_dotenv()
+cai_agent = os.getenv('CAI_AGENT_TYPE', "one_tool_agent").lower()
+# Get all available agents
+available_agents = get_available_agents()
+
+if cai_agent not in available_agents:
+    # stop and raise error
+    raise ValueError(f"Invalid CAI agent type: {cai_agent}")
+
+# Set the initial agent based on the environment variable
+cai_initial_agent = available_agents[cai_agent]
+
+# Special handling for one_tool agent
+#
+# NOTE: maintained this for backwards compatibility
+#
+# NOTE 2: consider adding this if CTF_NAME defined
+#
+if cai_agent == "one_tool_agent":
+    from cai.agents.one_tool import transfer_to_one_tool_agent  # noqa
+    cai_initial_agent.functions.append(
+        transfer_to_flag_discriminator
+    )
+    flag_discriminator.functions.append(transfer_to_one_tool_agent)  # noqa

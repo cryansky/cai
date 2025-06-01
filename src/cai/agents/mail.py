@@ -2,13 +2,9 @@
 Mail Agent module for checking email configuration security.
 
 """
-import os
-from openai import AsyncOpenAI
 import dns.resolver  # pylint: disable=import-error
-from cai.sdk.agents import Agent, OpenAIChatCompletionsModel
+from cai.types import Agent
 from cai.tools.misc.cli_utils import execute_cli_command
-from cai.sdk.agents import function_tool
-
 
 
 def get_txt_record(domain, record_type='TXT'):
@@ -62,7 +58,7 @@ def check_dkim(domain: str, selector: str = "default"):
         return txt_records[0]
     return None
 
-@function_tool
+
 def check_mail_spoofing_vulnerability(
         domain: str,
         dkim_selector: str = "default") -> dict:
@@ -104,6 +100,7 @@ def check_mail_spoofing_vulnerability(
 
 
 dns_smtp_agent = Agent(
+    model="gpt-4o",
     name="DNS_SMTP_Agent",
     description="Agent focused on assessing spoofing DMARC.",
     instructions=(
@@ -113,9 +110,5 @@ dns_smtp_agent = Agent(
         "detailed reports. Use execute_cli_command for basic scans. "
         "USE ONLY TOOL CALLS, DONT RETURN REASON."
     ),
-    tools=[check_mail_spoofing_vulnerability, execute_cli_command],
-    model=OpenAIChatCompletionsModel(
-        model=os.getenv('CAI_MODEL', "alias0"),
-        openai_client=AsyncOpenAI(),
-    )
+    functions=[check_mail_spoofing_vulnerability, execute_cli_command]
 )

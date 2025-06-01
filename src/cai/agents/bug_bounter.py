@@ -1,9 +1,8 @@
 """Red Team Base Agent"""
 import os
 from dotenv import load_dotenv
-from cai.sdk.agents import Agent, OpenAIChatCompletionsModel
-from openai import AsyncOpenAI
-from cai.util import load_prompt_template
+from cai.types import Agent  # pylint: disable=import-error
+from cai.util import load_prompt_template  # Add this import
 from cai.tools.command_and_control.sshpass import (  # pylint: disable=import-error # noqa: E501
     run_ssh_command_with_credentials
 )
@@ -23,30 +22,28 @@ from cai.tools.reconnaissance.shodan import (  # pylint: disable=import-error # 
     shodan_search,
     shodan_host_info
 )
-
+from cai.tools.misc.reasoning import think  # pylint: disable=import-error
 load_dotenv()
 # Prompts
 bug_bounter_system_prompt = load_prompt_template("prompts/system_bug_bounter.md")
-# Define tools list based on available API keys
-tools = [
+# Define functions list based on available API keys
+functions = [
     generic_linux_command,
     execute_code,
+    think,
     shodan_search,
     shodan_host_info
 ]
 
 if os.getenv('GOOGLE_SEARCH_API_KEY') and os.getenv('GOOGLE_SEARCH_CX'):
-    tools.append(make_google_search)
+    functions.append(make_google_search)
 
 bug_bounter_agent = Agent(
     name="Bug Bounter",
     instructions=bug_bounter_system_prompt,
     description="""Agent that specializes in bug bounty hunting and vulnerability discovery.
                    Expert in web security, API testing, and responsible disclosure.""",
-    tools=tools,
-    model=OpenAIChatCompletionsModel(
-        model=os.getenv('CAI_MODEL', "alias0"),
-        openai_client=AsyncOpenAI(),
-    )
-   
+    model=os.getenv('CAI_MODEL', "qwen2.5:14b"),
+    functions=functions,
+    parallel_tool_calls=False,
 )

@@ -31,9 +31,8 @@ from cai.agents.meta.local_python_executor import (
     fix_final_answer_code,
     truncate_content,
 )
-from cai.sdk.agents import Agent, Result, OpenAIChatCompletionsModel
-from dotenv import load_dotenv
-from openai import AsyncOpenAI
+from cai.types import Agent, Result
+
 
 class CodeAgentException(Exception):
     """Base exception class for CodeAgent-related errors."""
@@ -184,9 +183,9 @@ class CodeAgent(Agent):
     def __init__(  # pylint: disable=too-many-arguments,too-many-locals # noqa: E501
         self,
         name: str = "CodeAgent",
-        model: str = "alias0",
+        model: str = "qwen2.5:14b",
         instructions: Union[str, Callable[[], str]] = None,
-        tools: List[Callable] = None,
+        functions: List[Callable] = None,
         additional_authorized_imports: Optional[List[str]] = None,
         description: str = """Agent focused on writing and executing code.
                    State-of-the-art in code production.""",
@@ -202,7 +201,7 @@ class CodeAgent(Agent):
             name: Name of the agent
             model: Model to use for the agent
             instructions: Instructions for the agent
-            tools: List of tools available to the agent
+            functions: List of functions available to the agent
             additional_authorized_imports: List of additional imports to allow
             max_print_outputs_length: Maximum length of print outputs
             reasoning_effort: Level of reasoning effort (low, medium, high)
