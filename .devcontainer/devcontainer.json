@@ -81,6 +81,7 @@
 	"runArgs": [
 		"--privileged",
 		"-e", "DISPLAY=host.docker.internal:0",
-		"-v", "/tmp/.X11-unix:/tmp/.X11-unix"
+		"-v", "/tmp/.X11-unix:/tmp/.X11-unix",
+		"--add-host=11.0.0.1:host.docker.internal"
 	]
 }

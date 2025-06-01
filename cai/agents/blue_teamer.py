@@ -22,6 +22,7 @@ from cai.tools.web.search_web import (  # pylint: disable=import-error # noqa: E
 )
 # Prompts
 blueteam_agent_system_prompt = load_prompt_template("prompts/system_blue_team_agent.md")
+
 # Define functions list based on available API keys
 functions = [
     generic_linux_command,

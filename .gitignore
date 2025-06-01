@@ -160,5 +160,9 @@ nohup.out
 caiextensions-*
 pentestperf
 
-# python venvs
-venv*
+# logging
+.cai
+logs.txt
+
+# python env
+cai_env
