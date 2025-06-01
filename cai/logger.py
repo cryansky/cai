@@ -45,7 +45,7 @@ if os.getenv("CAI_TRACING", "false").lower() == "true":
         attributes={
             ResourceAttributes.PROJECT_NAME: project_name})
     tracer_provider = trace_sdk.TracerProvider(resource=resource)
-    span_exporter = OTLPSpanExporter("http://11.0.0.1:6006/v1/traces")
+    span_exporter = OTLPSpanExporter("http://host.docker.internal:6006/v1/traces")
     span_processor = SimpleSpanProcessor(span_exporter)
     tracer_provider.add_span_processor(span_processor)
     trace_api.set_tracer_provider(tracer_provider)
@@ -109,7 +109,7 @@ class ExploitLogger:
         project_id = ("UHJvamVjdDo1"
                       if source == "test_generic"
                       else "UHJvamVjdDoxOA==")
-        return f"http://11.0.0.1:6006/projects/{
+        return f"http://host.docker.internal:6006/projects/{
             project_id}/traces/{trace_id_hex}"
 
     def log_response(self, chain_element_name):

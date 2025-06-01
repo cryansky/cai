@@ -65,12 +65,13 @@ def _remove_confluence_namespaced_tags(text):
 
     return text
 
-def search_confluence(query: str, max_pages: int = 5):
+def search_confluence(query: str, search_space: str = CONFLUENCE_SEARCH_SPACE, max_pages: int = 5):
     """
     Search Confluence pages based on search keywords or phrase.
 
     Args:
         query (str): Search keywords or phrase.
+        search_space (str): Space key to search.
         max_pages (int): Maximum number of pages to return.
 
     Returns:
@@ -78,11 +79,11 @@ def search_confluence(query: str, max_pages: int = 5):
     """
     if not all([CONFLUENCE_URL, CONFLUENCE_USER, CONFLUENCE_API_TOKEN]):
         return [{"error": "Confluence credentials missing"}]
-
+    
     cql = (
         f'(type = "page" OR type = "blogpost") '
-        f'AND space = "{CONFLUENCE_SEARCH_SPACE}" '
-        f'AND (title ~ "{query}" OR text ~ "{query}") '
+        + (f'AND space = "{search_space}" ' if search_space else '')
+        + f'AND (title ~ "{query}" OR text ~ "{query}") '
         'ORDER BY lastmodified DESC'
     )
     
@@ -107,7 +108,10 @@ def search_confluence(query: str, max_pages: int = 5):
                 "url": metadata.get("source", ""),
                 "text": content
             })
-        return results
+        if results:
+            return results
+        else:
+            return "No document found. Try supplying a more generalized query."
     except Exception as e:
         return [{"error": str(e)}]
 
@@ -182,7 +186,7 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
                     "textSelectionMatchIndex": m
                 }
             }
-            print(json.dumps(payload))
+            # print(json.dumps(payload))
 
         post_resp = requests.post(comment_url, headers=headers, auth=auth, data=json.dumps(payload))
         post_resp.raise_for_status()
