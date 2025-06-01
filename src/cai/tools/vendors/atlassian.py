@@ -10,6 +10,7 @@ import html
 import json
 import html2text
 from langchain_community.document_loaders import ConfluenceLoader
+from cai.sdk.agents import function_tool
 
 CONFLUENCE_URL = os.getenv("CONFLUENCE_URL") 
 CONFLUENCE_USER = os.getenv("CONFLUENCE_USER")
@@ -65,6 +66,7 @@ def _remove_confluence_namespaced_tags(text):
 
     return text
 
+@function_tool
 def search_confluence(query: str, search_space: str = CONFLUENCE_SEARCH_SPACE, max_pages: int = 5):
     """
     Search Confluence pages based on search keywords or phrase.
@@ -115,6 +117,7 @@ def search_confluence(query: str, search_space: str = CONFLUENCE_SEARCH_SPACE, m
     except Exception as e:
         return [{"error": str(e)}]
 
+@function_tool
 def read_confluence_page(page_id: str) -> str:
     """
     Retrieves the plain text content of a Confluence page using its page ID.
@@ -148,6 +151,7 @@ def read_confluence_page(page_id: str) -> str:
     except Exception as e:
         return f"Error reading Confluence page: {e}"
 
+@function_tool
 def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) -> str:
     """
     Adds an inline comment to a Confluence page.
@@ -200,7 +204,8 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
         return f"HTTP error: {e} — {e.response.text}"
     except Exception as e:
         return f"Error posting inline comment: {e}"
-    
+
+@function_tool    
 def read_confluence_inline_comments(page_id: str) -> list:
     """
     Retrieve all inline comments associated with a specific Confluence page.
@@ -238,6 +243,7 @@ def read_confluence_inline_comments(page_id: str) -> list:
         print(f"Error fetching inline comments: {e}")
         return []
 
+@function_tool
 def reply_to_confluence_comment(comment_id: str, reply_text: str) -> str:
     """
     Post a reply to a specific Confluence comment.
@@ -267,7 +273,8 @@ def reply_to_confluence_comment(comment_id: str, reply_text: str) -> str:
         return f"Reply posted successfully (ID: {comment_id})"
     except requests.exceptions.RequestException as e:
         return f"Error posting reply: {e}"
-    
+
+@function_tool    
 def write_confluence_footer_comment(page_id: str, comment_text: str, parent_comment_id: str = None) -> str:
     """
     Post a footer comment to a Confluence page.

@@ -3,7 +3,9 @@ These are the tools for the model to read and write to files and other documents
 """
 
 import pymupdf
+from cai.sdk.agents import function_tool
 
+@function_tool
 def read_pdf_content(pdf_path: str) -> str:
     """
     Extracts and concatenates text content from all pages of a PDF file.
@@ -30,6 +32,7 @@ def read_pdf_content(pdf_path: str) -> str:
     except Exception as e:
         return f"Error reading PDF: {e}"
 
+@function_tool
 def add_comment_to_pdf(pdf_path: str, output_path: str, excerpt: str, comment: str):
     """
     Search for a text excerpt in a PDF and add a comment annotation at each match.

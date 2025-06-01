@@ -12,8 +12,10 @@ and analyzing digital evidence. This agent specializes in:
 - Threat hunting: Proactively searching for indicators of compromise
 """
 import os
-from cai.types import Agent  # pylint: disable=import-error
-from cai.util import load_prompt_template  # Add this import
+from openai import AsyncOpenAI
+from cai.sdk.agents import Agent, OpenAIChatCompletionsModel  # pylint: disable=import-error
+from cai.util import load_prompt_template
+from dotenv import load_dotenv
 from cai.tools.command_and_control.sshpass import (  # pylint: disable=import-error # noqa: E501
     run_ssh_command_with_credentials
 )
@@ -21,21 +23,22 @@ from cai.tools.command_and_control.sshpass import (  # pylint: disable=import-er
 from cai.tools.reconnaissance.generic_linux_command import (  # pylint: disable=import-error # noqa: E501
     generic_linux_command
 )
+from cai.tools.web.search_web import (  # pylint: disable=import-error # noqa: E501
+    make_web_search_with_explanation
+)
 
 from cai.tools.reconnaissance.exec_code import (  # pylint: disable=import-error # noqa: E501
     execute_code
 )
-from cai.tools.web.search_web import (  # pylint: disable=import-error # noqa: E501
-    make_web_search_with_explanation,
-)
+
 from cai.tools.reconnaissance.shodan import shodan_search
 from cai.tools.web.google_search import google_search
 from cai.tools.misc.reasoning import think  # pylint: disable=import-error
 
 # Prompts
 dfir_agent_system_prompt = load_prompt_template("prompts/system_dfir_agent.md")
-# Define functions list based on available API keys
-functions = [
+# Define tool list based on available API keys
+tools = [
     generic_linux_command,
     run_ssh_command_with_credentials,
     execute_code,
@@ -43,24 +46,25 @@ functions = [
 ]
 
 if os.getenv('PERPLEXITY_API_KEY'):
-    functions.append(make_web_search_with_explanation)
+    tools.append(make_web_search_with_explanation)
 
 # Add Shodan and Google search capabilities conditionally
 if os.getenv('SHODAN_API_KEY'):
-    functions.append(shodan_search)
+    tools.append(shodan_search)
 
 if os.getenv('GOOGLE_SEARCH_API_KEY') and os.getenv('GOOGLE_SEARCH_CX'):
-    functions.append(google_search)
+    tools.append(google_search)
+
 
 dfir_agent = Agent(
     name="DFIR Agent",
     instructions=dfir_agent_system_prompt,
     description="""Agent that specializes in Digital Forensics and Incident Response.
                    Expert in investigation and analysis of digital evidence.""",
-    model=os.getenv('CAI_MODEL', "qwen2.5:14b"),
-    functions=functions,
-    parallel_tool_calls=False,
-)
+    model=OpenAIChatCompletionsModel(
+        model=os.getenv('CAI_MODEL', "alias0"),
+        openai_client=AsyncOpenAI(),
+    ),
+    tools=tools,
 
-def transfer_to_dfir_agent():
-    return dfir_agent
+)

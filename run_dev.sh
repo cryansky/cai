@@ -1,3 +1,3 @@
 #/usr/bin/python3
 
-python3 src/cai/cli.py
+PYTHONPATH=./src python3 src/cai/cli.py
