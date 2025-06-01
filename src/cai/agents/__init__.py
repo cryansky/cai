@@ -104,7 +104,8 @@ def get_available_agents() -> Dict[str, Agent]:  # pylint: disable=R0912  # noqa
                     agent_name = attr_name
                     if agent_name not in agents_to_display:
                         agents_to_display[agent_name] = attr
-        except (ImportError, AttributeError):
+        except (ImportError, AttributeError) as e:
+            # print(e)
             pass
 
     # Also check the patterns subdirectory
