@@ -117,8 +117,7 @@ def search_confluence(query: str, search_space: str = CONFLUENCE_SEARCH_SPACE, m
     except Exception as e:
         return [{"error": str(e)}]
 
-@function_tool
-def read_confluence_page(page_id: str) -> str:
+def _read_confluence_page(page_id: str) -> str:
     """
     Retrieves the plain text content of a Confluence page using its page ID.
 
@@ -152,6 +151,10 @@ def read_confluence_page(page_id: str) -> str:
         return f"Error reading Confluence page: {e}"
 
 @function_tool
+def read_confluence_page(page_id: str) -> str:
+    return _read_confluence_page(page_id)
+
+@function_tool
 def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) -> str:
     """
     Adds an inline comment to a Confluence page.
@@ -168,7 +171,7 @@ def write_confluence_inline_comment(page_id: str, excerpt: str, comment: str) ->
         return "Confluence credentials are missing or invalid."
 
     try:
-        page_body = read_confluence_page(page_id)
+        page_body = _read_confluence_page(page_id)
 
         page_body = _normalize_markdown(page_body)
         excerpt = _normalize_markdown(excerpt)
