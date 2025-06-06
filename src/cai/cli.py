@@ -253,7 +253,7 @@ def update_agent_models_recursively(agent, new_model, visited=None):
                 )
 
 
-def run_cai_cli(starting_agent, context_variables=None, max_turns=float('inf'), force_until_flag=False):
+def run_cai_cli(starting_agent, context_variables=None, max_turns=float('inf'), force_until_flag=False, input_control=get_user_input):
     """
     Run a simple interactive CLI loop for CAI.
 
@@ -383,7 +383,7 @@ def run_cai_cli(starting_agent, context_variables=None, max_turns=float('inf'), 
         
             if not force_until_flag and ctf_init!=0:
                 # Get user input with command completion and history
-                user_input = get_user_input(
+                user_input = input_control(
                     command_completer,
                     kb,
                     history_file,
