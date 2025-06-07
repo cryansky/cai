@@ -1,3 +1,3 @@
 #/usr/bin/python3
-
-PYTHONPATH=./src python3 src/interface/slack/slack_events.py
+export PYTHONUNBUFFERED=1
+PYTHONPATH=./src python3 src/interface/slack/app.py
